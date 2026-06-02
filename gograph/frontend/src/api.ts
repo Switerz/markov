@@ -171,6 +171,8 @@ export type ScenarioAnalysis = {
   path_probability: number | null;
   conversion_probability_given_last_node: number | null;
   composite_conversion_probability: number | null;
+  historical_conversion_rate: number | null;
+  lift: number | null;
   expected_revenue: number | null;
   expected_ticket: number | null;
   historical_support: number;

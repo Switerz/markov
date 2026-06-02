@@ -92,6 +92,8 @@ class ScenarioAnalysisResponse(BaseModel):
     path_probability: Optional[float]
     conversion_probability_given_last_node: Optional[float]
     composite_conversion_probability: Optional[float]
+    historical_conversion_rate: Optional[float]
+    lift: Optional[float]
     expected_revenue: Optional[float]
     expected_ticket: Optional[float]
     historical_support: int

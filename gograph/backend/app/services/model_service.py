@@ -137,7 +137,9 @@ def run_model(
             raw_paths = extraction_service.extract_raw_paths(params)
         except Exception:
             raw_paths = pd.DataFrame()
-    top_paths = path_service.enrich_raw_paths(raw_paths, transition_matrix, top_n=50)
+    # top_n=500 stores enough paths to make sandbox historical analysis reliable.
+    # The raw_paths SQL aggregates by path_sequence so 500 rows is still light.
+    top_paths = path_service.enrich_raw_paths(raw_paths, transition_matrix, top_n=500)
 
     transition_counts = attribution_service.build_transition_counts(
         converting_transitions,

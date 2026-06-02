@@ -103,13 +103,10 @@ def delete_scenario(scenario_id: int, session: Session) -> bool:
 def analyze_scenario(scenario_id: int, session: Session) -> dict[str, Any]:
     """
     Compute path metrics for a saved scenario using the attached model run's
-    transition matrix and attribution results.
-
-    Returns a dict with:
-      path_probability, conversion_probability_given_last_node,
-      composite_conversion_probability, expected_revenue, expected_ticket,
-      historical_support, similar_paths, warnings, confidence_score
+    transition matrix, attribution results and path summary.
     """
+    from gograph.backend.app.db.models import ModelRun
+
     row = session.get(Scenario, scenario_id)
     if row is None:
         raise ValueError(f"Scenario {scenario_id} not found.")
@@ -117,9 +114,15 @@ def analyze_scenario(scenario_id: int, session: Session) -> dict[str, Any]:
     path_channels: list[str] = json.loads(row.path_channels_json)
     model_run_id: int = row.model_run_id
 
-    matrix_df = get_model_run_table(model_run_id, "transition_matrix", session=session)
-    attribution_df = get_model_run_table(model_run_id, "attribution_results", session=session)
-    paths_df = get_model_run_table(model_run_id, "path_summary", session=session)
+    matrix_df     = get_model_run_table(model_run_id, "transition_matrix",  session=session)
+    paths_df      = get_model_run_table(model_run_id, "path_summary",       session=session)
+    transitions_df = get_model_run_table(model_run_id, "transition_counts",  session=session)
+
+    model_run = session.get(ModelRun, model_run_id)
+    # observed_conversion_rate = real-world conversion rate (n_converters / total visitors)
+    # used as lift baseline — more meaningful than Markov chain P(Conversion|start)
+    baseline_conv_rate = float(model_run.observed_conversion_rate or 0.0) if model_run else 0.0
+    model_total_rev    = float(model_run.total_revenue) if model_run else 0.0
 
     warnings: list[str] = []
 
@@ -127,7 +130,6 @@ def analyze_scenario(scenario_id: int, session: Session) -> dict[str, Any]:
         warnings.append("Nenhum canal definido no cenário.")
         return _empty_result(warnings)
 
-    # Detect hypothetical nodes (not in matrix)
     known_states = set()
     if not matrix_df.empty:
         known_states = set(matrix_df["from_state"]) | set(matrix_df["to_state"])
@@ -135,29 +137,49 @@ def analyze_scenario(scenario_id: int, session: Session) -> dict[str, Any]:
         if ch not in known_states:
             warnings.append(f"Canal hipotético ou sem dados: '{ch}'")
 
-    # --- Metrics ---
-    path_prob = _path_probability(path_channels, matrix_df)
+    # --- Transition-matrix metrics ---
+    path_prob      = _path_probability(path_channels, matrix_df)
     conv_given_last = _conv_prob_given_last(path_channels[-1], matrix_df)
-
-    # P(reaching last channel via path) × P(eventually converting from last node)
-    path_to_last = _path_probability_no_conv(path_channels, matrix_df)
+    path_to_last   = _path_probability_no_conv(path_channels, matrix_df)
     conv_from_last = _conv_prob_eventually(path_channels[-1], matrix_df)
-    composite = path_to_last * conv_from_last
+    composite      = path_to_last * conv_from_last
 
-    total_revenue = float(
-        attribution_df["markov_revenue"].sum()
-        if not attribution_df.empty and "markov_revenue" in attribution_df.columns
-        else 0.0
-    )
-    n_conv_weight = _total_conversion_weight(matrix_df)
-    avg_ticket = total_revenue / n_conv_weight if n_conv_weight > 0 else 0.0
-    expected_revenue = composite * total_revenue if total_revenue > 0 else 0.0
-    expected_ticket = avg_ticket
+    # --- True avg ticket: total_revenue / n_converting_sessions ---
+    # Uses sum(n) of converting→Conversion transitions (decay-weighted, ≈ n_converters).
+    # Falls back to path_summary aggregation if transitions unavailable.
+    avg_ticket = _avg_ticket_from_transitions(transitions_df, model_total_rev) \
+        or _avg_ticket_from_paths(paths_df, model_total_rev)
 
+    # --- Historical metrics from similar paths ---
     historical_support, similar = _historical_support(path_channels, paths_df)
+    hist_conv_rate = _historical_conversion_rate(similar)
+
+    # --- Expected revenue: support × hist_conv_rate × avg_ticket (negocialmente útil) ---
+    if historical_support > 0 and hist_conv_rate > 0 and avg_ticket > 0:
+        expected_revenue = float(historical_support) * hist_conv_rate * avg_ticket
+    else:
+        expected_revenue = None
+
+    # --- Lift: conv rate deste padrão vs taxa de conversão observada do modelo ---
+    lift = _clean(hist_conv_rate / baseline_conv_rate) if baseline_conv_rate > 0 and hist_conv_rate > 0 else None
 
     if path_prob == 0.0 and not warnings:
-        warnings.append("Probabilidade zero — verifique se todos os canais têm transições na matriz.")
+        warnings.append(
+            "Probabilidade de cadeia zero — alguma transição neste caminho não existe na matriz. "
+            "Use o suporte histórico como principal métrica."
+        )
+
+    # Warn if historical metrics come from very few paths (likely selection bias)
+    if historical_support == 0:
+        warnings.append(
+            "Sem suporte histórico armazenado para este padrão. "
+            "Rode o modelo novamente para persistir mais caminhos (top 500)."
+        )
+    elif hist_conv_rate is not None and hist_conv_rate > 0.5 and historical_support < 200:
+        warnings.append(
+            f"Taxa de conversão histórica alta ({hist_conv_rate:.0%}) baseada em amostra pequena "
+            f"({historical_support} jornadas) — interprete com cautela."
+        )
 
     confidence = _confidence_score(path_prob, historical_support)
 
@@ -167,8 +189,10 @@ def analyze_scenario(scenario_id: int, session: Session) -> dict[str, Any]:
         "path_probability": _clean(path_prob),
         "conversion_probability_given_last_node": _clean(conv_given_last),
         "composite_conversion_probability": _clean(composite),
+        "historical_conversion_rate": _clean(hist_conv_rate) if hist_conv_rate > 0 else None,
+        "lift": lift,
         "expected_revenue": _clean(expected_revenue),
-        "expected_ticket": _clean(expected_ticket),
+        "expected_ticket": _clean(avg_ticket) if avg_ticket > 0 else None,
         "historical_support": historical_support,
         "similar_paths": similar,
         "warnings": warnings,
@@ -249,12 +273,44 @@ def _conv_prob_eventually(last_channel: str, matrix: pd.DataFrame) -> float:
     return min(conv_absorbed, 1.0)
 
 
-def _total_conversion_weight(matrix: pd.DataFrame) -> float:
-    """Sum of n-weights flowing into Conversion (proxy for relative conversion volume)."""
-    if matrix.empty:
+def _avg_ticket_from_transitions(transitions_df: pd.DataFrame, model_total_rev: float) -> float:
+    """
+    Avg ticket = model_total_revenue / n_converting_sessions.
+    n_converting_sessions ≈ sum(n) of converting transitions that lead to Conversion
+    (decay-weighted count, so approximately equal to number of converters).
+    """
+    if transitions_df.empty or model_total_rev <= 0:
         return 0.0
-    into_conv = matrix[matrix["to_state"] == "Conversion"]["probability"].sum()
-    return float(into_conv) if into_conv > 0 else 1.0
+    mask = (
+        (transitions_df.get("to_state", pd.Series(dtype=str)) == "Conversion") &
+        (transitions_df.get("transition_type", pd.Series(dtype=str)) == "converting")
+    )
+    n_conv = float(transitions_df.loc[mask, "n"].fillna(0).sum()) if mask.any() else 0.0
+    return model_total_rev / n_conv if n_conv > 0 else 0.0
+
+
+def _avg_ticket_from_paths(paths_df: pd.DataFrame, model_total_rev: float) -> float:
+    """Fallback: avg ticket from top-N paths in path_summary."""
+    if not paths_df.empty and "conversion_count" in paths_df.columns and "revenue" in paths_df.columns:
+        total_conv = float(paths_df["conversion_count"].fillna(0).sum())
+        total_rev  = float(paths_df["revenue"].fillna(0).sum())
+        if total_conv > 0:
+            return total_rev / total_conv
+    return 0.0
+
+
+def _historical_conversion_rate(similar: list[dict]) -> float:
+    """Weighted average conversion rate across the top similar paths."""
+    if not similar:
+        return 0.0
+    rates   = [p["conversion_rate"] for p in similar if p.get("conversion_rate") is not None]
+    counts  = [p["count"]           for p in similar if p.get("conversion_rate") is not None]
+    if not rates:
+        return 0.0
+    total_count = sum(counts)
+    if total_count == 0:
+        return sum(rates) / len(rates)
+    return sum(r * c for r, c in zip(rates, counts)) / total_count
 
 
 def _historical_support(
@@ -341,6 +397,8 @@ def _empty_result(warnings: list[str]) -> dict[str, Any]:
         "path_probability": None,
         "conversion_probability_given_last_node": None,
         "composite_conversion_probability": None,
+        "historical_conversion_rate": None,
+        "lift": None,
         "expected_revenue": None,
         "expected_ticket": None,
         "historical_support": 0,

@@ -817,10 +817,22 @@ td {
   color: #92400e;
 }
 
+.metrics-section {
+  margin-bottom: 10px;
+}
+.metrics-section-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #94a3b8;
+  margin: 10px 0 4px;
+}
 .metric-row {
   display: flex;
   flex-direction: column;
-  padding: 8px 0;
+  padding: 6px 0;
   border-bottom: 1px solid #f1f5f9;
   cursor: default;
 }
@@ -828,11 +840,18 @@ td {
   font-size: 11px;
   color: #64748b;
 }
+.metric-hint-icon {
+  color: #94a3b8;
+  font-size: 10px;
+  cursor: help;
+}
 .metric-value {
   font-size: 15px;
   color: #1e293b;
   font-weight: 700;
 }
+.metric-good { color: #16a34a; }
+.metric-bad  { color: #dc2626; }
 
 .similar-paths {
   margin-top: 14px;

@@ -400,61 +400,95 @@ export function SandboxView({ modelRunId }: { modelRunId: number }) {
           {analysis.warnings.length > 0 && (
             <div className="result-warnings">
               {analysis.warnings.map((w, i) => (
-                <p key={i} className="warning-item">
-                  ⚠ {w}
-                </p>
+                <p key={i} className="warning-item">⚠ {w}</p>
               ))}
             </div>
           )}
 
-          <MetricRow
-            label="Probabilidade do caminho"
-            value={
-              analysis.path_probability != null
-                ? fmtPct.format(analysis.path_probability)
-                : "n/d"
-            }
-            hint="P((start)→ch1→…→chN→Conversão)"
-          />
-          <MetricRow
-            label="P(Conversão | último canal)"
-            value={
-              analysis.conversion_probability_given_last_node != null
-                ? fmtPct.format(analysis.conversion_probability_given_last_node)
-                : "n/d"
-            }
-            hint="Um passo direto do último canal até Conversão"
-          />
-          <MetricRow
-            label="Prob. composta de conversão"
-            value={
-              analysis.composite_conversion_probability != null
-                ? fmtPct.format(analysis.composite_conversion_probability)
-                : "n/d"
-            }
-            hint="P(chegar ao último canal via este path) × P(eventualmente converter)"
-          />
-          <MetricRow
-            label="Receita esperada"
-            value={
-              analysis.expected_revenue != null
-                ? fmtMoney.format(analysis.expected_revenue)
-                : "n/d"
-            }
-          />
-          <MetricRow
-            label="Ticket médio esperado"
-            value={
-              analysis.expected_ticket != null
-                ? fmtMoney.format(analysis.expected_ticket)
-                : "n/d"
-            }
-          />
-          <MetricRow
-            label="Suporte histórico"
-            value={`${analysis.historical_support} jornadas`}
-            hint="Jornadas reais que contêm esta sequência como subsequência"
-          />
+          {/* Hero metrics: historical evidence */}
+          <div className="metrics-section">
+            <span className="metrics-section-label">Evidência histórica</span>
+            <MetricRow
+              label="Suporte histórico"
+              value={`${analysis.historical_support.toLocaleString("pt-BR")} jornadas`}
+              hint="Jornadas reais que contêm esta sequência como subsequência"
+            />
+            <MetricRow
+              label="Taxa de conversão histórica"
+              value={
+                analysis.historical_conversion_rate != null
+                  ? fmtPct.format(analysis.historical_conversion_rate)
+                  : "n/d"
+              }
+              hint="Média ponderada da taxa de conversão dos caminhos similares"
+            />
+            <MetricRow
+              label="Lift vs baseline"
+              value={
+                analysis.lift != null
+                  ? `${fmtNum.format(analysis.lift)}×`
+                  : "n/d"
+              }
+              hint="Taxa de conversão deste padrão ÷ taxa de conversão média do modelo. >1 = acima da média."
+              highlight={analysis.lift != null ? (analysis.lift >= 1.5 ? "good" : analysis.lift < 0.8 ? "bad" : undefined) : undefined}
+            />
+          </div>
+
+          {/* Business metrics */}
+          <div className="metrics-section">
+            <span className="metrics-section-label">Negócio</span>
+            <MetricRow
+              label="Receita esperada"
+              value={
+                analysis.expected_revenue != null
+                  ? fmtMoney.format(analysis.expected_revenue)
+                  : "n/d"
+              }
+              hint="Suporte histórico × taxa conv. histórica × ticket médio real"
+            />
+            <MetricRow
+              label="Ticket médio real"
+              value={
+                analysis.expected_ticket != null
+                  ? fmtMoney.format(analysis.expected_ticket)
+                  : "n/d"
+              }
+              hint="Receita total ÷ total de conversões do model run"
+            />
+          </div>
+
+          {/* Matrix metrics (less actionable, for reference) */}
+          <div className="metrics-section">
+            <span className="metrics-section-label">Matriz de transição</span>
+            <MetricRow
+              label="P(Conversão | último canal)"
+              value={
+                analysis.conversion_probability_given_last_node != null
+                  ? fmtPct.format(analysis.conversion_probability_given_last_node)
+                  : "n/d"
+              }
+              hint="P(último canal → Conversão) — um passo direto na matriz"
+            />
+            <MetricRow
+              label="Prob. composta de conversão"
+              value={
+                analysis.composite_conversion_probability != null
+                  ? fmtPct.format(analysis.composite_conversion_probability)
+                  : "n/d"
+              }
+              hint="P(chegar ao último canal via este path) × P(eventualmente converter a partir dele)"
+            />
+            <MetricRow
+              label="Prob. do caminho exato"
+              value={
+                analysis.path_probability != null
+                  ? fmtPct.format(analysis.path_probability)
+                  : "n/d"
+              }
+              hint="Produto de todas as transições (start→ch1→…→chN→Conversão). Tende a ser pequeno — use evidência histórica para decisões."
+            />
+          </div>
+
           <MetricRow
             label="Confiança"
             value={
@@ -492,15 +526,19 @@ function MetricRow({
   label,
   value,
   hint,
+  highlight,
 }: {
   label: string;
   value: string;
   hint?: string;
+  highlight?: "good" | "bad";
 }) {
   return (
     <div className="metric-row" title={hint}>
-      <span className="metric-label">{label}</span>
-      <strong className="metric-value">{value}</strong>
+      <span className="metric-label">{label}{hint && <span className="metric-hint-icon" title={hint}> ⓘ</span>}</span>
+      <strong className={`metric-value${highlight === "good" ? " metric-good" : highlight === "bad" ? " metric-bad" : ""}`}>
+        {value}
+      </strong>
     </div>
   );
 }
