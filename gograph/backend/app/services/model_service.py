@@ -67,6 +67,13 @@ def run_model(
             extraction_service.extract_transition_counts(params)
         )
 
+    if converting_transitions.empty:
+        raise RuntimeError(
+            f"Nenhuma transição de conversão extraída para {params.start_date}–{params.end_date}. "
+            "Verifique se a tabela de compras tem dados para o período e se o join com sessões está "
+            "funcionando. Pode ser uma falha transitória — tente rodar novamente."
+        )
+
     if observed_conversion_rate is None and params.non_conv_scale is None:
         observed_conversion_rate = extraction_service.extract_observed_conversion_rate(params)
 

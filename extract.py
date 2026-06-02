@@ -440,7 +440,13 @@ def get_total_revenue(
     """
     sql = TOTAL_REVENUE_SQL.format(start_date=start_date, end_date=end_date)
     df = _run_query(database_id, sql)
-    return float(df["total_revenue"].iloc[0] or 0.0)
+    value = df["total_revenue"].iloc[0]
+    if value is None:
+        raise RuntimeError(
+            f"get_total_revenue returned NULL for {start_date}–{end_date}. "
+            "A tabela de compras pode estar temporariamente indisponível."
+        )
+    return float(value)
 
 
 # ---------------------------------------------------------------------------
