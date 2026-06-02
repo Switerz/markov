@@ -756,6 +756,21 @@ td {
   border-color: #16a34a;
   color: #15803d;
 }
+.path-step.start {
+  background: #f0f9ff;
+  border-color: #7dd3fc;
+  color: #0369a1;
+  font-style: italic;
+}
+.path-preview-wrap {
+  padding: 6px 14px;
+  background: #f0f9ff;
+  border-bottom: 1px solid #bae6fd;
+  flex-shrink: 0;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+}
 .path-arrow {
   color: #64748b;
 }

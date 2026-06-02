@@ -143,7 +143,8 @@ export function SandboxView({ modelRunId }: { modelRunId: number }) {
     setScenarioName("Novo cenário");
   }
 
-  async function saveScenario() {
+  // Returns the saved scenario id, or null on failure.
+  async function saveScenario(): Promise<number | null> {
     setSaving(true);
     setError(null);
     try {
@@ -183,18 +184,22 @@ export function SandboxView({ modelRunId }: { modelRunId: number }) {
       setActiveId(saved.id);
       const updated = await api.listScenarios(modelRunId);
       setScenarios(updated);
+      return saved.id;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao salvar.");
+      return null;
     } finally {
       setSaving(false);
     }
   }
 
   async function runAnalysis() {
-    if (activeId === null) {
-      await saveScenario();
+    // React state updates are async — get the id from saveScenario's return value
+    // directly rather than reading the stale activeId closure after save.
+    let id = activeId;
+    if (id === null) {
+      id = await saveScenario();
     }
-    const id = activeId ?? (scenarios[0]?.id ?? null);
     if (id === null) return;
     setAnalyzing(true);
     setError(null);
@@ -341,19 +346,25 @@ export function SandboxView({ modelRunId }: { modelRunId: number }) {
           </div>
         </div>
 
-        {orderedPath.length > 0 && (
-          <div className="path-preview">
-            <span className="path-label">Sequência:</span>
-            {orderedPath.map((ch, i) => (
-              <span key={i} className="path-step">
-                {i > 0 && <span className="path-arrow">→</span>}
-                {ch}
-              </span>
-            ))}
-            <span className="path-arrow">→</span>
-            <span className="path-step conversion">Conversão?</span>
-          </div>
-        )}
+        <div className="path-preview-wrap">
+          {orderedPath.length === 0 ? (
+            <p className="canvas-hint" style={{ margin: 0 }}>
+              Adicione canais da paleta e conecte-os em sequência. <strong>(start)</strong> e <strong>Conversion</strong> são adicionados automaticamente pela análise — não é necessário desenhá-los no canvas.
+            </p>
+          ) : (
+            <div className="path-preview">
+              <span className="path-step start">(start)</span>
+              {orderedPath.map((ch, i) => (
+                <span key={i} className="path-step">
+                  <span className="path-arrow">→</span>
+                  {ch}
+                </span>
+              ))}
+              <span className="path-arrow">→</span>
+              <span className="path-step conversion">Conversion</span>
+            </div>
+          )}
+        </div>
 
         {error && (
           <div className="alert" style={{ margin: "0 0 8px" }}>
