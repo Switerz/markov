@@ -1,5 +1,8 @@
 results/
 contextos/
+gograph.db
+*.sqlite
+*.sqlite3
 
 __pycache__/
 *.py[cod]
@@ -24,6 +27,9 @@ share/
 .ruff_cache/
 .coverage
 htmlcov/
+
+node_modules/
+dist/
 
 .DS_Store
 Thumbs.db

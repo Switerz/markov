@@ -1,0 +1,1 @@
+"""GoGraph analytical application package."""

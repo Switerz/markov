@@ -65,8 +65,7 @@ def _state_sql(alias: str) -> str:
     a = f"{alias}.acquisition_channel"
     return (
         "multiIf(\n"
-        f"        ({m} IN ('paid_social','paid')) AND ({s} IN ('facebook','fb','whatsapp','facebook-sitelink')), 'Paid Social / Facebook',\n"
-        f"        ({m} IN ('paid_social','paid')) AND ({s} IN ('instagram','ig')), 'Paid Social / Instagram',\n"
+        f"        ({m} IN ('paid_social','paid')) AND ({s} IN ('facebook','fb','whatsapp','facebook-sitelink','instagram','ig')), 'Paid Meta Ads',\n"
         f"        {m} = 'cpc' AND {s} = 'google',                                   'Google Ads',\n"
         f"        {m} IN ('display','retargeting') AND {s} IN ('criteo','rtbhouse'), 'Display / Retargeting',\n"
         f"        {m} IN ('newsletter_email','automatic_email','architect_email','email','automatic_webpush','web_push'), 'Email',\n"
@@ -83,6 +82,105 @@ def _state_sql(alias: str) -> str:
         "        'Other'\n"
         "    )"
     )
+
+
+def _raw_paths_sql(start_date: str, end_date: str, lookback: int) -> str:
+    """
+    SQL to extract full user-level path sequences for Sprint 7 path analysis.
+
+    Converting paths: only sessions that occurred on or before the purchase date
+    are included. This prevents post-purchase CRM messages (WhatsApp confirmations,
+    shipping updates) from inflating single-channel converting paths.
+
+    Non-converting paths: all sessions in the analysis window for users who made
+    no purchase.
+    """
+    state_expr = _state_sql("s_all")
+    return f"""
+    WITH purchase_info AS (
+        SELECT
+            p.user_pseudo_id,
+            sum(p.value)        AS revenue,
+            max(s_conv.`start`) AS conv_start
+        FROM analytics.purchases_dedup_lm_v2 AS p FINAL
+        INNER JOIN plausible_events_db.sessions_v2 AS s_conv FINAL
+            ON p.session_id = s_conv.session_id
+        WHERE p.purchase_date BETWEEN '{start_date}' AND '{end_date}'
+          AND p.user_pseudo_id != ''
+        GROUP BY p.user_pseudo_id
+    ),
+    converting_journeys AS (
+        -- Only pre-purchase sessions: prevents post-purchase CRM from inflating paths
+        SELECT
+            s_all.upid AS user_id,
+            arrayStringConcat(
+                arrayMap(x -> x.2,
+                    arraySort(x -> x.1,
+                        groupArray((toUnixTimestamp(s_all.`start`), {state_expr}))
+                    )
+                ),
+                ' -> '
+            ) AS path_sequence,
+            1          AS converted,
+            pi.revenue AS revenue
+        FROM (
+            SELECT
+                arrayElement(entry_meta.value, indexOf(entry_meta.key, 'user_pseudo_id')) AS upid,
+                `start`, utm_medium, utm_source, utm_campaign, acquisition_channel
+            FROM plausible_events_db.sessions_v2 FINAL
+            WHERE `start` BETWEEN toDate('{start_date}') - INTERVAL {lookback} DAY AND '{end_date}'
+              AND has(entry_meta.key, 'user_pseudo_id')
+              AND arrayElement(entry_meta.value, indexOf(entry_meta.key, 'user_pseudo_id')) != ''
+        ) AS s_all
+        INNER JOIN purchase_info pi
+            ON  s_all.upid = pi.user_pseudo_id
+            AND s_all.`start` <= pi.conv_start
+        GROUP BY s_all.upid, pi.revenue
+    ),
+    nonconverting_journeys AS (
+        SELECT
+            s_all.upid          AS user_id,
+            arrayStringConcat(
+                arrayMap(x -> x.2,
+                    arraySort(x -> x.1,
+                        groupArray((toUnixTimestamp(s_all.`start`), {state_expr}))
+                    )
+                ),
+                ' -> '
+            ) AS path_sequence,
+            0            AS converted,
+            toFloat64(0) AS revenue
+        FROM (
+            SELECT
+                arrayElement(entry_meta.value, indexOf(entry_meta.key, 'user_pseudo_id')) AS upid,
+                `start`, utm_medium, utm_source, utm_campaign, acquisition_channel
+            FROM plausible_events_db.sessions_v2 FINAL
+            WHERE `start` BETWEEN '{start_date}' AND '{end_date}'
+              AND has(entry_meta.key, 'user_pseudo_id')
+              AND arrayElement(entry_meta.value, indexOf(entry_meta.key, 'user_pseudo_id')) != ''
+        ) AS s_all
+        WHERE s_all.upid NOT IN (SELECT user_pseudo_id FROM purchase_info)
+        GROUP BY s_all.upid
+    )
+    SELECT path_sequence, converted, sum(revenue) AS revenue, count() AS occurrences
+    FROM (
+        SELECT path_sequence, converted, revenue FROM converting_journeys
+        UNION ALL
+        SELECT path_sequence, converted, revenue FROM nonconverting_journeys
+    )
+    GROUP BY path_sequence, converted
+    ORDER BY occurrences DESC
+    """
+
+def get_raw_paths(
+    database_id: int,
+    start_date: str,
+    end_date: str,
+    lookback: int = 30
+) -> pd.DataFrame:
+    """Returns aggregated path sequences for Path Intelligence (Sprint 7)."""
+    sql = _raw_paths_sql(start_date, end_date, lookback)
+    return _run_query(database_id, sql)
 
 
 # ---------------------------------------------------------------------------
@@ -359,16 +457,38 @@ WHERE company = 'Gocase'
 """
 
 # Meta spend is at account level (no FB/IG platform split available).
-# Total Meta spend is assigned to 'Paid Social / Facebook'.
+# Total Meta spend is assigned to 'Paid Meta Ads'.
 # Instagram will show NaN ROAS — a known data limitation.
 META_COST_SQL = """
 SELECT
-    'Paid Social / Facebook' AS channel,
+    'Paid Meta Ads' AS channel,
     sum(spend) AS spend
 FROM raw.gogroup_meta_segments_clientes
 WHERE company = 'Gocase'
   AND date_start >= '{start_date}'
   AND date_start < CAST('{end_date}' AS date) + INTERVAL '1 day'
+"""
+
+# SMS: fixed cost of R$0.04 per message sent via Insider.
+SMS_COST_SQL = """
+SELECT
+    'SMS' AS channel,
+    sum(sent) * 0.04 AS spend
+FROM raw.insider_journey_channels
+WHERE brand = 'gocase'
+  AND channel = 'sms'
+  AND stat_date BETWEEN '{start_date}' AND '{end_date}'
+"""
+
+# WhatsApp CRM: fixed cost of R$0.40 per message sent via Insider.
+WHATSAPP_CRM_COST_SQL = """
+SELECT
+    'WhatsApp CRM' AS channel,
+    sum(sent) * 0.40 AS spend
+FROM raw.insider_journey_channels
+WHERE brand = 'gocase'
+  AND channel = 'whatsapp'
+  AND stat_date BETWEEN '{start_date}' AND '{end_date}'
 """
 
 
@@ -378,7 +498,9 @@ def get_channel_spend(
     end_date: str,
 ) -> pd.DataFrame:
     """
-    Returns spend per channel from Google Ads + Meta.
+    Returns spend per channel from Google Ads, Meta, SMS and WhatsApp CRM.
+    SMS and WhatsApp CRM are derived from Insider send counts × fixed unit costs
+    (R$0.04/msg and R$0.40/msg respectively).
     Columns: channel, spend
     """
     google = _run_query(
@@ -393,6 +515,18 @@ def get_channel_spend(
     )
     meta["spend"] = meta["spend"].astype(float)
 
-    spend = pd.concat([google, meta], ignore_index=True)
+    sms = _run_query(
+        db_datamart,
+        SMS_COST_SQL.format(start_date=start_date, end_date=end_date),
+    )
+    sms["spend"] = sms["spend"].astype(float)
+
+    wpp = _run_query(
+        db_datamart,
+        WHATSAPP_CRM_COST_SQL.format(start_date=start_date, end_date=end_date),
+    )
+    wpp["spend"] = wpp["spend"].astype(float)
+
+    spend = pd.concat([google, meta, sms, wpp], ignore_index=True)
     spend = spend.groupby("channel", as_index=False).agg(spend=("spend", "sum"))
     return spend

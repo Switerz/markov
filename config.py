@@ -7,6 +7,11 @@ local .env or shell environment, never in this file.
 import os
 from typing import Optional
 
+from dotenv import load_dotenv
+
+
+load_dotenv()
+
 
 def _env_int(name: str, default: int) -> int:
     return int(os.getenv(name, str(default)))
@@ -27,6 +32,7 @@ def _env_optional_float(name: str, default: Optional[float] = None) -> Optional[
 
 METABASE_URL = os.getenv("METABASE_URL", "")
 METABASE_API_KEY = os.getenv("METABASE_API_KEY", "")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///gograph.db")
 
 # ClickHouse (Plausible) via Metabase
 DB_PLAUSIBLE = _env_int("DB_PLAUSIBLE", 70)
@@ -57,13 +63,16 @@ DECAY_LAMBDA = _env_float("DECAY_LAMBDA", 0.05)
 # 5 000 samples runs in ~5–10 s for 18 channels.
 SHAPLEY_SAMPLES = _env_int("SHAPLEY_SAMPLES", 5000)
 
+# Transition extraction batching. auto uses monthly batches for long windows.
+MODEL_BATCH_MODE = os.getenv("MODEL_BATCH_MODE", "auto")
+MODEL_BATCH_DAYS = _env_int("MODEL_BATCH_DAYS", 35)
+
 # Markov states — classified in SQL via utm_medium + utm_source only.
 # utm_campaign is intentionally ignored: naming conventions are inconsistent
 # and all Google CPC types share the same medium/source pair.
 TRACKED_STATES = {
     # Paid Social
-    "Paid Social / Facebook",
-    "Paid Social / Instagram",
+    "Paid Meta Ads",
     # Google (all CPC types unified: Search, Shopping, PMax, Demand Gen)
     "Google Ads",
     # Other paid
@@ -86,8 +95,7 @@ TRACKED_STATES = {
 
 # States that represent paid spend (used for ROAS calculation)
 PAID_CHANNELS = {
-    "Paid Social / Facebook",
-    "Paid Social / Instagram",
+    "Paid Meta Ads",
     "Google Ads",
     "Display / Retargeting",
 }
