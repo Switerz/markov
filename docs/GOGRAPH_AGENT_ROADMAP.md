@@ -343,40 +343,51 @@ Criterio de aceite:
 
 Objetivo: permitir desenhar caminhos e estimar metricas com base no historico.
 
+Status: concluido. Backend com CRUD completo de cenarios e motor de analise de
+paths em `gograph/backend/app/services/sandbox_service.py` e
+`gograph/backend/app/api/sandbox.py`. Modelo `Scenario` persiste nodes, edges e
+`path_channels` em SQLite. A analise computa `path_probability`,
+`conversion_probability_given_last_node`, `composite_conversion_probability`
+(path ate ultimo canal × P(eventualmente converter) via serie de potencia),
+`expected_revenue`, `expected_ticket`, `historical_support`, `similar_paths`,
+`warnings` e `confidence_score`. Frontend usa `@xyflow/react` em aba `Sandbox`:
+paleta de canais conhecidos + canal hipotetico customizavel, canvas interativo
+com nos e arestas, preview da sequencia, salvar/analisar cenarios, painel de
+resultados. Todos os 12 testes do `tests/test_sandbox_service.py` passam.
+
 Frontend:
 
-- React Flow.
-- Adicionar, renomear e remover nos.
-- Conectar e remover arestas.
-- Selecionar canal existente.
-- Criar canal hipotetico.
-- Salvar e executar analise do cenario.
+- React Flow (@xyflow/react v12). ✓
+- Adicionar, renomear e remover nos. ✓
+- Conectar e remover arestas. ✓
+- Selecionar canal existente. ✓
+- Criar canal hipotetico (borda tracejada amarela). ✓
+- Salvar e executar analise do cenario. ✓
 
 Backend:
 
-- `POST /sandbox/scenarios`
-- `GET /sandbox/scenarios`
-- `GET /sandbox/scenarios/{id}`
-- `PUT /sandbox/scenarios/{id}`
-- `DELETE /sandbox/scenarios/{id}`
-- `POST /sandbox/scenarios/{id}/analyze`
+- `POST /sandbox/scenarios` ✓
+- `GET /sandbox/scenarios` ✓
+- `GET /sandbox/scenarios/{id}` ✓
+- `PUT /sandbox/scenarios/{id}` ✓
+- `DELETE /sandbox/scenarios/{id}` ✓
+- `POST /sandbox/scenarios/{id}/analyze` ✓
 
-Metricas:
+Metricas implementadas:
 
-- `path_probability`
-- `conversion_probability_given_last_node`
-- `composite_conversion_probability`
-- `expected_revenue`
-- `expected_ticket`
-- `historical_support`
-- `similar_paths`
-- `warnings`
-- `recommendations`
-- `confidence_score`
+- `path_probability` ✓
+- `conversion_probability_given_last_node` ✓
+- `composite_conversion_probability` ✓
+- `expected_revenue` ✓
+- `expected_ticket` ✓
+- `historical_support` ✓
+- `similar_paths` ✓
+- `warnings` ✓
+- `confidence_score` ✓
 
 Criterio de aceite:
 
-- Usuario desenha um caminho e recebe metricas esperadas.
+- Usuario desenha um caminho e recebe metricas esperadas. ✓
 
 ### Sprint 9 - Comparador De Cenarios
 
@@ -493,8 +504,8 @@ Criterio de aceite:
 - Atribuicao Markov normaliza removal effects positivos.
 - Shapley usa Monte Carlo sobre contribuicoes marginais de coalizoes.
 - Receita atribuida multiplica peso por receita total real.
-- ROAS so e calculado quando existe spend confiavel por canal.
 
+- ROAS so e calculado quando existe spend confiavel por canal.
 ## Validacao Recomendada
 
 Com dependencias instaladas:

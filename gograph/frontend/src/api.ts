@@ -149,6 +149,58 @@ export type PathRow = {
   confidence_score?: number | null;
 };
 
+// ---------------------------------------------------------------------------
+// Sandbox types
+// ---------------------------------------------------------------------------
+
+export type Scenario = {
+  id: number;
+  model_run_id: number;
+  name: string;
+  description: string | null;
+  nodes: Record<string, unknown>[];
+  edges: Record<string, unknown>[];
+  path_channels: string[];
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type ScenarioAnalysis = {
+  scenario_id: number;
+  path_channels: string[];
+  path_probability: number | null;
+  conversion_probability_given_last_node: number | null;
+  composite_conversion_probability: number | null;
+  expected_revenue: number | null;
+  expected_ticket: number | null;
+  historical_support: number;
+  similar_paths: Array<{
+    path: string;
+    count: number;
+    conversion_rate: number | null;
+    revenue: number | null;
+  }>;
+  warnings: string[];
+  confidence_score: number | null;
+};
+
+export type ScenarioCreatePayload = {
+  model_run_id: number;
+  name: string;
+  description?: string | null;
+  nodes: Record<string, unknown>[];
+  edges: Record<string, unknown>[];
+  path_channels: string[];
+};
+
+export type ScenarioUpdatePayload = {
+  name?: string;
+  description?: string | null;
+  nodes?: Record<string, unknown>[];
+  edges?: Record<string, unknown>[];
+  path_channels?: string[];
+};
+
 export type ModelRunCreatePayload = {
   start_date: string;
   end_date: string;
@@ -200,5 +252,28 @@ export const api = {
     request<ModelRun>("/model-runs", {
       method: "POST",
       body: JSON.stringify(payload),
+    }),
+
+  // Sandbox
+  listScenarios: (modelRunId: number) =>
+    request<Scenario[]>(`/sandbox/scenarios?model_run_id=${modelRunId}`),
+  getScenario: (id: number) => request<Scenario>(`/sandbox/scenarios/${id}`),
+  createScenario: (payload: ScenarioCreatePayload) =>
+    request<Scenario>("/sandbox/scenarios", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateScenario: (id: number, payload: ScenarioUpdatePayload) =>
+    request<Scenario>(`/sandbox/scenarios/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  deleteScenario: (id: number) =>
+    fetch(`${API_BASE}/sandbox/scenarios/${id}`, { method: "DELETE" }).then(
+      () => undefined,
+    ),
+  analyzeScenario: (id: number) =>
+    request<ScenarioAnalysis>(`/sandbox/scenarios/${id}/analyze`, {
+      method: "POST",
     }),
 };

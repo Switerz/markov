@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   BarChart3,
   Database,
+  FlaskConical,
   GitGraph,
   Lightbulb,
   Play,
@@ -32,6 +33,7 @@ import {
   PathRow,
   TouchpointRow,
 } from "./api";
+import { SandboxView } from "./SandboxView";
 
 type Tab =
   | "overview"
@@ -41,7 +43,8 @@ type Tab =
   | "touchpoints"
   | "diagnostics"
   | "quality"
-  | "paths";
+  | "paths"
+  | "sandbox";
 
 const defaultPayload: ModelRunCreatePayload = {
   start_date: "2026-03-01",
@@ -296,6 +299,10 @@ export function App() {
             <GitGraph size={16} />
             Caminhos
           </TabButton>
+          <TabButton active={tab === "sandbox"} onClick={() => setTab("sandbox")}>
+            <FlaskConical size={16} />
+            Sandbox
+          </TabButton>
         </nav>
 
         {loading && <p className="muted">Carregando...</p>}
@@ -325,6 +332,15 @@ export function App() {
         )}
         {!loading && overview && tab === "quality" && <Quality rows={quality} />}
         {!loading && overview && tab === "paths" && <Paths rows={paths} />}
+        {tab === "sandbox" && selectedId !== null && (
+          <SandboxView modelRunId={selectedId} />
+        )}
+        {tab === "sandbox" && selectedId === null && (
+          <div className="empty-state">
+            <h2>Selecione um model run</h2>
+            <p>O Sandbox usa a matriz de transição de um model run existente.</p>
+          </div>
+        )}
       </section>
     </main>
   );

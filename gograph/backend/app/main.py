@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import config
 from gograph.backend.app.api.model_runs import router as model_runs_router
+from gograph.backend.app.api.sandbox import router as sandbox_router
 from gograph.backend.app.db import create_db_and_tables
 
 
@@ -29,6 +30,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(model_runs_router)
+    app.include_router(sandbox_router)
 
     @app.get("/")
     def root():

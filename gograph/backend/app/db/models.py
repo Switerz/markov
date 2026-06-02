@@ -174,6 +174,28 @@ class ExportRecord(Base):
     model_run: Mapped[ModelRun] = relationship(back_populates="exports")
 
 
+class Scenario(Base):
+    __tablename__ = "scenarios"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    model_run_id: Mapped[int] = mapped_column(ForeignKey("model_runs.id"), index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    nodes_json: Mapped[str] = mapped_column(Text, default="[]")
+    edges_json: Mapped[str] = mapped_column(Text, default="[]")
+    path_channels_json: Mapped[str] = mapped_column(Text, default="[]")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    model_run: Mapped[ModelRun] = relationship(back_populates="scenarios")
+
+
+ModelRun.scenarios = relationship(
+    "Scenario",
+    back_populates="model_run",
+    cascade="all, delete-orphan",
+)
+
 Index("ix_transition_counts_run_type", TransitionCount.model_run_id, TransitionCount.transition_type)
 Index("ix_attribution_results_run_channel", AttributionResult.model_run_id, AttributionResult.channel)
 Index("ix_channel_diagnostics_run_channel", ChannelDiagnostic.model_run_id, ChannelDiagnostic.channel)
