@@ -1,0 +1,398 @@
+"""Data extraction from Metabase/ClickHouse."""
+
+import requests
+import pandas as pd
+from config import METABASE_URL, METABASE_API_KEY, TRACKED_STATES
+
+SPECIAL_STATES = {"Conversion", "Non-Conversion", "(start)"}
+ALL_STATES = TRACKED_STATES | SPECIAL_STATES
+
+
+def _run_query(database_id: int, sql: str) -> pd.DataFrame:
+    """Execute native SQL against Metabase and return a DataFrame."""
+    if not METABASE_URL or not METABASE_API_KEY:
+        raise RuntimeError(
+            "METABASE_URL and METABASE_API_KEY must be set in the environment. "
+            "See .env.example for the required variables."
+        )
+
+    resp = requests.post(
+        f"{METABASE_URL}/api/dataset",
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": METABASE_API_KEY,
+        },
+        json={
+            "type": "native",
+            "native": {"query": sql, "template-tags": {}},
+            "database": database_id,
+            "parameters": [],
+            "middleware": {
+                "js-int-to-string?": True,
+                "userland-query?": True,
+                "add-default-userland-constraints?": True,
+            },
+        },
+        timeout=600,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+
+    if data.get("status") == "failed" or data.get("error"):
+        error = data.get("error") or (data.get("via") or [{}])[-1].get("error", "unknown")
+        raise RuntimeError(f"Query failed: {error}")
+
+    rows = data["data"]["rows"]
+    cols = [c["name"] for c in data["data"]["cols"]]
+    return pd.DataFrame(rows, columns=cols)
+
+
+def _ensure_tracked(state: str) -> str:
+    """Map any unrecognised state to Other; preserve special states as-is."""
+    return state if state in ALL_STATES else "Other"
+
+
+def _state_sql(alias: str) -> str:
+    """
+    Returns a ClickHouse multiIf(...) expression that classifies a session into
+    a Markov state using utm_medium + utm_source only, with fallback to
+    acquisition_channel for untagged sessions.
+    utm_campaign is intentionally excluded — naming conventions are inconsistent
+    and all Google CPC types share medium=cpc / source=google.
+    """
+    m = f"{alias}.utm_medium"
+    s = f"{alias}.utm_source"
+    a = f"{alias}.acquisition_channel"
+    return (
+        "multiIf(\n"
+        f"        ({m} IN ('paid_social','paid')) AND ({s} IN ('facebook','fb','whatsapp','facebook-sitelink')), 'Paid Social / Facebook',\n"
+        f"        ({m} IN ('paid_social','paid')) AND ({s} IN ('instagram','ig')), 'Paid Social / Instagram',\n"
+        f"        {m} = 'cpc' AND {s} = 'google',                                   'Google Ads',\n"
+        f"        {m} IN ('display','retargeting') AND {s} IN ('criteo','rtbhouse'), 'Display / Retargeting',\n"
+        f"        {m} IN ('newsletter_email','automatic_email','architect_email','email','automatic_webpush','web_push'), 'Email',\n"
+        f"        {m} IN ('automatic_whatsapp','newsletter_whatsapp') OR ({m} = 'paid_social' AND {s} = 'automatic_whatsapp'), 'WhatsApp CRM',\n"
+        f"        {m} IN ('newsletter_sms','automatic_sms') OR ({m} = 'paid_social' AND {s} IN ('sms','automatic_sms')), 'SMS',\n"
+        f"        {m} IN ('organic_social','organic_live','organic_broadcast') AND {s} = 'instagram', 'Organic Social / Instagram',\n"
+        f"        {m} = 'organic_social' AND {s} = 'facebook',                      'Organic Social / Facebook',\n"
+        f"        {m} = 'influencers',                                               'Influencers',\n"
+        f"        {m} = 'clube_gocase',                                              'Clube GoCase',\n"
+        f"        {m} IN ('network_affiliates','network_parcerias','referral'),      'Referral',\n"
+        f"        {a} = 'Direct',          'Direct',\n"
+        f"        {a} = 'Organic Search',  'Organic Search',\n"
+        f"        {a} = 'Referral',        'Referral',\n"
+        "        'Other'\n"
+        "    )"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Converting transitions
+# ---------------------------------------------------------------------------
+
+def _converting_sql(start_date: str, end_date: str, lookback: int, decay_lambda: float = 0.0) -> str:
+    state_expr = _state_sql("s_all")
+    # Sessions on LEFT (scan), purchase_info on RIGHT (small hash table ~30K rows).
+    # This avoids OOM. Tested feasible for single-month windows (~20M sessions).
+    # decay_lambda: each session's weight = exp(-decay_lambda * days_before_conversion).
+    # 0 = uniform (original behaviour). day_deltas array stores days-to-conversion per session.
+    return f"""
+WITH purchase_info AS (
+    SELECT
+        p.session_id AS conv_session_id,
+        p.user_pseudo_id,
+        sum(p.value)        AS revenue,
+        max(s_conv.`start`) AS conv_start
+    FROM analytics.purchases_dedup_lm_v2 AS p FINAL
+    INNER JOIN plausible_events_db.sessions_v2 AS s_conv FINAL
+        ON p.session_id = s_conv.session_id
+    WHERE p.purchase_date BETWEEN '{start_date}' AND '{end_date}'
+      AND p.user_pseudo_id != ''
+    GROUP BY p.session_id, p.user_pseudo_id
+),
+journeys_raw AS (
+    SELECT
+        pi.conv_session_id AS session_id,
+        arraySort(x -> x.1,
+            groupArray((
+                toUnixTimestamp(s_all.`start`),
+                {state_expr},
+                toFloat64(toUnixTimestamp(pi.conv_start) - toUnixTimestamp(s_all.`start`)) / 86400.0
+            ))
+        ) AS sorted_sessions,
+        pi.revenue
+    FROM (
+        SELECT
+            arrayElement(entry_meta.value, indexOf(entry_meta.key, 'user_pseudo_id')) AS upid,
+            `start`, utm_medium, utm_source, utm_campaign, acquisition_channel
+        FROM plausible_events_db.sessions_v2 FINAL
+        WHERE `start` BETWEEN toDate('{start_date}') - INTERVAL {lookback} DAY AND '{end_date}'
+          AND has(entry_meta.key, 'user_pseudo_id')
+          AND arrayElement(entry_meta.value, indexOf(entry_meta.key, 'user_pseudo_id')) != ''
+          AND (utm_medium != '' OR acquisition_channel != '')
+    ) AS s_all
+    INNER JOIN purchase_info AS pi ON s_all.upid = pi.user_pseudo_id
+    WHERE s_all.`start` <= pi.conv_start
+      AND s_all.`start` >= pi.conv_start - INTERVAL {lookback} DAY
+    GROUP BY pi.conv_session_id, pi.conv_start, pi.revenue
+),
+journeys AS (
+    SELECT
+        session_id,
+        arrayMap(x -> x.2, sorted_sessions) AS channels,
+        arrayMap(x -> x.3, sorted_sessions) AS day_deltas,
+        revenue
+    FROM journeys_raw
+),
+transitions AS (
+    SELECT
+        t.1 AS from_ch,
+        t.2 AS to_ch,
+        exp(-{decay_lambda} * t.3) AS decay_weight,
+        revenue
+    FROM journeys
+    ARRAY JOIN arrayZip(
+        arrayConcat(['(start)'], channels),
+        arrayConcat(channels, ['Conversion']),
+        arrayConcat(day_deltas, [toFloat64(0)])
+    ) AS t
+)
+SELECT from_ch, to_ch, sum(decay_weight) AS n, sum(revenue) AS total_revenue
+FROM transitions
+GROUP BY from_ch, to_ch
+ORDER BY n DESC
+"""
+
+
+def get_converting_transitions(
+    database_id: int,
+    start_date: str,
+    end_date: str,
+    lookback: int = 30,
+    decay_lambda: float = 0.0,
+) -> pd.DataFrame:
+    """
+    Returns transition weights from converting journeys.
+    Columns: from_ch, to_ch, n (float decay-weight sum), total_revenue
+
+    Journey identity: user_pseudo_id (cookie-based, stable cross-day).
+    State classification: utm_medium + utm_source + utm_campaign, fallback to acquisition_channel.
+    decay_lambda: exp decay applied per session by days-to-conversion (0 = uniform).
+    """
+    sql = _converting_sql(start_date, end_date, lookback, decay_lambda)
+    df = _run_query(database_id, sql)
+    df["n"] = df["n"].astype(float)
+    df["total_revenue"] = df["total_revenue"].astype(float)
+    df["from_ch"] = df["from_ch"].apply(_ensure_tracked)
+    df["to_ch"] = df["to_ch"].apply(_ensure_tracked)
+    df = (
+        df.groupby(["from_ch", "to_ch"], as_index=False)
+        .agg(n=("n", "sum"), total_revenue=("total_revenue", "sum"))
+    )
+    return df
+
+
+# ---------------------------------------------------------------------------
+# Non-converting transitions
+# ---------------------------------------------------------------------------
+
+def _nonconverting_sql(start_date: str, end_date: str, sample_pct: int) -> str:
+    state_expr = _state_sql("s")
+    # Same user_id limitation as converting SQL — see note above.
+    return f"""
+WITH converters AS (
+    SELECT DISTINCT s_conv.user_id
+    FROM analytics.purchases_dedup_lm_v2 AS p FINAL
+    INNER JOIN plausible_events_db.sessions_v2 AS s_conv FINAL
+        ON p.session_id = s_conv.session_id
+    WHERE p.purchase_date BETWEEN '{start_date}' AND '{end_date}'
+),
+sampled_users AS (
+    SELECT DISTINCT user_id
+    FROM plausible_events_db.sessions_v2 FINAL
+    WHERE `start` BETWEEN '{start_date}' AND '{end_date}'
+      AND (utm_medium != '' OR acquisition_channel != '')
+      AND user_id NOT IN (SELECT user_id FROM converters)
+      AND cityHash64(user_id) % 100 < {sample_pct}
+),
+journeys AS (
+    SELECT
+        s.user_id,
+        arrayMap(x -> x.2,
+            arraySort(x -> x.1,
+                groupArray((toUnixTimestamp(s.`start`), {state_expr}))
+            )
+        ) AS channels
+    FROM plausible_events_db.sessions_v2 AS s FINAL
+    WHERE s.user_id IN (SELECT user_id FROM sampled_users)
+      AND s.`start` BETWEEN '{start_date}' AND '{end_date}'
+      AND (s.utm_medium != '' OR s.acquisition_channel != '')
+    GROUP BY s.user_id
+),
+transitions AS (
+    SELECT
+        t.1 AS from_ch,
+        t.2 AS to_ch
+    FROM journeys
+    ARRAY JOIN arrayZip(
+        arrayConcat(['(start)'], channels),
+        arrayConcat(channels, ['Non-Conversion'])
+    ) AS t
+)
+SELECT from_ch, to_ch, count() AS n
+FROM transitions
+GROUP BY from_ch, to_ch
+ORDER BY n DESC
+"""
+
+
+def get_nonconverting_transitions(
+    database_id: int,
+    start_date: str,
+    end_date: str,
+    sample_pct: int = 1,
+) -> pd.DataFrame:
+    """
+    Returns transition counts from non-converting journeys (sampled).
+    Columns: from_ch, to_ch, n
+
+    Journey identity: user_pseudo_id (cookie-based).
+    Excludes users who made a purchase in the analysis window.
+    """
+    sql = _nonconverting_sql(start_date, end_date, sample_pct)
+    df = _run_query(database_id, sql)
+    df["n"] = df["n"].astype(int)
+    df["from_ch"] = df["from_ch"].apply(_ensure_tracked)
+    df["to_ch"] = df["to_ch"].apply(_ensure_tracked)
+    df = df.groupby(["from_ch", "to_ch"], as_index=False).agg(n=("n", "sum"))
+    return df
+
+
+# ---------------------------------------------------------------------------
+# Conversion rate estimation (for NON_CONV_SCALE auto-calibration)
+# ---------------------------------------------------------------------------
+
+_CONV_COUNT_SQL = """
+SELECT count(DISTINCT user_pseudo_id) AS n
+FROM analytics.purchases_dedup_lm_v2 FINAL
+WHERE purchase_date BETWEEN '{start_date}' AND '{end_date}'
+  AND user_pseudo_id != ''
+"""
+
+_NCONV_SAMPLE_COUNT_SQL = """
+WITH converters AS (
+    SELECT DISTINCT s.user_id
+    FROM analytics.purchases_dedup_lm_v2 AS p FINAL
+    INNER JOIN plausible_events_db.sessions_v2 AS s FINAL
+        ON p.session_id = s.session_id
+    WHERE p.purchase_date BETWEEN '{start_date}' AND '{end_date}'
+)
+SELECT count(DISTINCT user_id) AS n
+FROM plausible_events_db.sessions_v2 FINAL
+WHERE `start` BETWEEN '{start_date}' AND '{end_date}'
+  AND (utm_medium != '' OR acquisition_channel != '')
+  AND user_id NOT IN (SELECT user_id FROM converters)
+  AND cityHash64(user_id) % 100 < {sample_pct}
+"""
+
+
+def get_conversion_rate(
+    database_id: int,
+    start_date: str,
+    end_date: str,
+    sample_pct: int,
+) -> float:
+    """
+    Estimate real conversion rate: n_converters / (n_converters + n_nonconverters).
+    Converters: distinct user_pseudo_id in purchases.
+    Non-converters: distinct user_id in sampled sessions, scaled up by 100/sample_pct.
+    Note: mixes two identity spaces (known limitation until user_pseudo_id is materialised).
+    """
+    n_conv = int(
+        _run_query(database_id, _CONV_COUNT_SQL.format(
+            start_date=start_date, end_date=end_date))["n"].iloc[0]
+    )
+    n_nconv_sample = int(
+        _run_query(database_id, _NCONV_SAMPLE_COUNT_SQL.format(
+            start_date=start_date, end_date=end_date, sample_pct=sample_pct))["n"].iloc[0]
+    )
+    n_nconv = n_nconv_sample * (100 / sample_pct)
+    total = n_conv + n_nconv
+    return n_conv / total if total > 0 else 0.01
+
+
+# ---------------------------------------------------------------------------
+# True total revenue (unique purchases, no double-counting)
+# ---------------------------------------------------------------------------
+
+TOTAL_REVENUE_SQL = """
+SELECT sum(value) AS total_revenue
+FROM analytics.purchases_dedup_lm_v2 FINAL
+WHERE purchase_date BETWEEN '{start_date}' AND '{end_date}'
+"""
+
+
+def get_total_revenue(
+    database_id: int,
+    start_date: str,
+    end_date: str,
+) -> float:
+    """
+    Returns true total revenue — one row per purchase, not inflated by
+    multi-touch transition counts.
+    """
+    sql = TOTAL_REVENUE_SQL.format(start_date=start_date, end_date=end_date)
+    df = _run_query(database_id, sql)
+    return float(df["total_revenue"].iloc[0] or 0.0)
+
+
+# ---------------------------------------------------------------------------
+# Channel spend (Google + Meta)
+# ---------------------------------------------------------------------------
+
+GOOGLE_COST_SQL = """
+SELECT
+    'Google Ads' AS channel,
+    sum(cost) AS spend
+FROM raw.gogroup_google_ads
+WHERE company = 'Gocase'
+  AND date BETWEEN '{start_date}' AND '{end_date}'
+"""
+
+# Meta spend is at account level (no FB/IG platform split available).
+# Total Meta spend is assigned to 'Paid Social / Facebook'.
+# Instagram will show NaN ROAS — a known data limitation.
+META_COST_SQL = """
+SELECT
+    'Paid Social / Facebook' AS channel,
+    sum(spend) AS spend
+FROM raw.gogroup_meta_segments_clientes
+WHERE company = 'Gocase'
+  AND date_start >= '{start_date}'
+  AND date_start < CAST('{end_date}' AS date) + INTERVAL '1 day'
+"""
+
+
+def get_channel_spend(
+    db_datamart: int,
+    start_date: str,
+    end_date: str,
+) -> pd.DataFrame:
+    """
+    Returns spend per channel from Google Ads + Meta.
+    Columns: channel, spend
+    """
+    google = _run_query(
+        db_datamart,
+        GOOGLE_COST_SQL.format(start_date=start_date, end_date=end_date),
+    )
+    google["spend"] = google["spend"].astype(float)
+
+    meta = _run_query(
+        db_datamart,
+        META_COST_SQL.format(start_date=start_date, end_date=end_date),
+    )
+    meta["spend"] = meta["spend"].astype(float)
+
+    spend = pd.concat([google, meta], ignore_index=True)
+    spend = spend.groupby("channel", as_index=False).agg(spend=("spend", "sum"))
+    return spend
