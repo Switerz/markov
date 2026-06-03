@@ -380,6 +380,7 @@ export function App() {
             funnelAttribution={funnelAttribution}
             sequentialEffects={sequentialEffects}
             channels={channels}
+            rawChannels={rawChannels}
           />
         )}
         {tab === "sandbox" && selectedId !== null && (
@@ -610,8 +611,10 @@ function Channels({
         ]}
         rows={rows.map((r) => ({
           ...r,
-          roas_first_click: r.first_click_roas,
-          roas_last_click: r.last_click_roas,
+          roas_markov: r.roas_markov != null ? `${fmtNumber.format(r.roas_markov)}×` : null,
+          roas_shapley: r.roas_shapley != null ? `${fmtNumber.format(r.roas_shapley)}×` : null,
+          roas_first_click: r.first_click_roas != null ? `${fmtNumber.format(r.first_click_roas)}×` : null,
+          roas_last_click: r.last_click_roas != null ? `${fmtNumber.format(r.last_click_roas)}×` : null,
           raw_markov_weight: rawMap.get(r.channel)?.markov_weight ?? null,
         }))}
       />
@@ -1019,11 +1022,13 @@ function ModelDiagnostics({
   funnelAttribution,
   sequentialEffects,
   channels,
+  rawChannels,
 }: {
   loopDiagnostics: LoopDiagnosticRow[];
   funnelAttribution: FunnelAttributionRow[];
   sequentialEffects: SequentialEffectRow[];
   channels: ChannelRow[];
+  rawChannels: ChannelRow[];
 }) {
   const [seqFilter, setSeqFilter] = useState<string>("Paid Meta Ads");
   const metaChannel = "Paid Meta Ads";
@@ -1265,7 +1270,7 @@ function ModelDiagnostics({
       )}
 
       {/* ---- COMPARISON: Raw vs Funnel ---- */}
-      {hasFunnel && channels.length > 0 && (
+      {hasFunnel && (channels.length > 0 || rawChannels.length > 0) && (
         <section className="chart-band">
           <header>
             <h2>Comparação: Raw Channel vs Funnel Stage</h2>
@@ -1283,20 +1288,32 @@ function ModelDiagnostics({
                 </tr>
               </thead>
               <tbody>
-                {channels.map((ch, i) => {
-                  const funnelRows = funnelByChannel[ch.channel] ?? [];
-                  const funnelMarkov = funnelRows.reduce((s, r) => s + (r.markov_weight ?? 0), 0);
-                  const funnelShapley = funnelRows.reduce((s, r) => s + (r.shapley_weight ?? 0), 0);
-                  return (
-                    <tr key={i}>
-                      <td><strong>{ch.channel}</strong></td>
-                      <td>{ch.markov_weight != null ? fmtPct.format(ch.markov_weight) : "n/d"}</td>
-                      <td>{ch.shapley_weight != null ? fmtPct.format(ch.shapley_weight) : "n/d"}</td>
-                      <td>{funnelMarkov > 0 ? fmtPct.format(funnelMarkov) : "—"}</td>
-                      <td>{funnelShapley > 0 ? fmtPct.format(funnelShapley) : "—"}</td>
-                    </tr>
+                {(() => {
+                  // Use rawChannels as the row source for the comparison table
+                  const rawMap = new Map(rawChannels.map((r) => [r.channel, r]));
+                  // Merge with funnel data — all channels that appear in either model
+                  const allChannels = Array.from(
+                    new Set([...rawChannels.map((r) => r.channel), ...channels.map((r) => r.channel)])
                   );
-                })}
+                  return allChannels.map((channelName, i) => {
+                    const raw = rawMap.get(channelName);
+                    const funnelRows = funnelByChannel[channelName] ?? [];
+                    const funnelMarkov = funnelRows.reduce((s, r) => s + (r.markov_weight ?? 0), 0);
+                    const funnelShapley = funnelRows.reduce((s, r) => s + (r.shapley_weight ?? 0), 0);
+                    // Also check channels (funnel primary) for shapley
+                    const funnelCh = channels.find((c) => c.channel === channelName);
+                    const funnelShapleyFinal = funnelShapley > 0 ? funnelShapley : (funnelCh?.shapley_weight ?? 0);
+                    return (
+                      <tr key={i}>
+                        <td><strong>{channelName}</strong></td>
+                        <td>{raw?.markov_weight != null ? fmtPct.format(raw.markov_weight) : "0%"}</td>
+                        <td>{raw?.shapley_weight != null ? fmtPct.format(raw.shapley_weight) : "0%"}</td>
+                        <td>{funnelMarkov > 0 ? fmtPct.format(funnelMarkov) : (funnelCh?.markov_weight ? fmtPct.format(funnelCh.markov_weight) : "—")}</td>
+                        <td>{funnelShapleyFinal > 0 ? fmtPct.format(funnelShapleyFinal) : "—"}</td>
+                      </tr>
+                    );
+                  });
+                })()}
               </tbody>
             </table>
           </div>
