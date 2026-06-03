@@ -6,6 +6,7 @@ from datetime import date, timedelta
 import pandas as pd
 
 from extract import (
+    get_censored_count,
     get_channel_spend,
     get_conversion_rate,
     get_converting_transitions,
@@ -32,6 +33,7 @@ def extract_transition_counts(params: ModelRunParams) -> tuple[pd.DataFrame, pd.
         start_date=params.start_date,
         end_date=params.end_date,
         sample_pct=params.non_conv_sample_pct,
+        censorship_days=params.censorship_days,
     )
     return converting, nonconverting
 
@@ -118,6 +120,21 @@ def extract_observed_conversion_rate(params: ModelRunParams) -> float:
         start_date=params.start_date,
         end_date=params.end_date,
         sample_pct=params.non_conv_sample_pct,
+        censorship_days=params.censorship_days,
+    )
+
+
+def extract_censored_count(params: ModelRunParams) -> tuple[int, int]:
+    """
+    Returns (censored_sample_count, total_sample_count) for the non-converting
+    sampled journeys. Both values are 0 when censorship_days == 0.
+    """
+    return get_censored_count(
+        database_id=params.db_plausible,
+        start_date=params.start_date,
+        end_date=params.end_date,
+        sample_pct=params.non_conv_sample_pct,
+        censorship_days=params.censorship_days,
     )
 
 

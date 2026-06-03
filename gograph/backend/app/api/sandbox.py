@@ -6,12 +6,15 @@ from sqlalchemy.orm import Session
 from gograph.backend.app.api.deps import get_db_session
 from gograph.backend.app.api.schemas import (
     ScenarioAnalysisResponse,
+    ScenarioCompareRequest,
+    ScenarioCompareResponse,
     ScenarioCreateRequest,
     ScenarioResponse,
     ScenarioUpdateRequest,
 )
 from gograph.backend.app.services.sandbox_service import (
     analyze_scenario,
+    compare_scenarios,
     create_scenario,
     delete_scenario,
     get_scenario,
@@ -82,3 +85,17 @@ def analyze(scenario_id: int, session: Session = Depends(get_db_session)):
         return analyze_scenario(scenario_id=scenario_id, session=session)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.post("/compare", response_model=ScenarioCompareResponse)
+def compare(payload: ScenarioCompareRequest, session: Session = Depends(get_db_session)):
+    try:
+        return compare_scenarios(
+            model_run_id=payload.model_run_id,
+            scenario_ids=payload.scenario_ids,
+            include_baseline=payload.include_baseline,
+            include_top_path=payload.include_top_path,
+            session=session,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))

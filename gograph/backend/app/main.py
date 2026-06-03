@@ -44,7 +44,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
 
     @app.get("/health")
     def health():
-        return {"status": "ok"}
+        return {"status": "ok", "censorship_days": config.CENSORSHIP_DAYS}
 
     return app
 

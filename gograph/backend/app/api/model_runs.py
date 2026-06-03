@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import config
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -17,6 +18,7 @@ from gograph.backend.app.services.journey_insight_service import (
     compute_touchpoint_metrics,
     generate_channel_insights,
 )
+from gograph.backend.app.services.roas_service import compute_first_last_click_roas
 from gograph.backend.app.services.journey_graph_service import build_journey_graph
 from gograph.backend.app.services.model_service import run_model
 from gograph.backend.app.services.persistence_service import (
@@ -44,13 +46,14 @@ def create_model_run(
         end_date=payload.end_date,
         db_plausible=payload.db_plausible,
         db_datamart=payload.db_datamart,
-        lookback_days=payload.lookback_days,
+        lookback_days=payload.lookback_days if payload.lookback_days is not None else config.LOOKBACK_DAYS,
         non_conv_sample_pct=payload.non_conv_sample_pct,
         non_conv_scale=payload.non_conv_scale,
         decay_lambda=payload.decay_lambda,
         shapley_samples=payload.shapley_samples,
         batch_mode=payload.batch_mode,
         batch_days=payload.batch_days,
+        censorship_days=payload.censorship_days if payload.censorship_days is not None else config.CENSORSHIP_DAYS,
     )
     database_url = request.app.state.database_url
     model_run_id = create_pending_model_run(
@@ -96,7 +99,26 @@ def get_channels(
     model_run_id: int,
     session: Session = Depends(get_db_session),
 ):
-    return _table_response(model_run_id, "attribution_results", session)
+    _ensure_run_exists(model_run_id, session)
+    import pandas as pd
+    attribution = get_model_run_table(model_run_id, "attribution_results", session=session)
+    transitions = get_model_run_table(model_run_id, "transition_counts", session=session)
+
+    spend_df = (
+        attribution[["channel", "spend"]].copy()
+        if not attribution.empty and "spend" in attribution.columns
+        else pd.DataFrame(columns=["channel", "spend"])
+    )
+    first_last = compute_first_last_click_roas(transitions, spend_df)
+
+    if not first_last.empty and not attribution.empty:
+        attribution = attribution.merge(first_last, on="channel", how="left")
+
+    return {
+        "model_run_id": model_run_id,
+        "table": "attribution_results",
+        "rows": attribution.to_dict("records") if not attribution.empty else [],
+    }
 
 
 @router.get("/{model_run_id}/diagnostics", response_model=TableResponse)

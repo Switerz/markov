@@ -32,6 +32,10 @@ export type ChannelRow = {
   spend?: number | null;
   roas_markov?: number | null;
   roas_shapley?: number | null;
+  first_click_revenue?: number | null;
+  first_click_roas?: number | null;
+  last_click_revenue?: number | null;
+  last_click_roas?: number | null;
   recommendation?: string | null;
 };
 
@@ -203,10 +207,50 @@ export type ScenarioUpdatePayload = {
   path_channels?: string[];
 };
 
+export type ScenarioCompareItem = {
+  source: "scenario" | "baseline" | "top_real_path";
+  scenario_id: number | null;
+  name: string;
+  path_channels: string[];
+  path_probability: number | null;
+  composite_conversion_probability: number | null;
+  historical_conversion_rate: number | null;
+  lift: number | null;
+  expected_revenue: number | null;
+  expected_ticket: number | null;
+  historical_support: number;
+  confidence_score: number | null;
+  warnings: string[];
+};
+
+export type ScenarioDelta = {
+  composite_conversion_delta: number | null;
+  composite_conversion_pct: number | null;
+  expected_revenue_delta: number | null;
+  expected_revenue_pct: number | null;
+  confidence_delta: number | null;
+  historical_support_delta: number | null;
+};
+
+export type ScenarioCompareResponse = {
+  items: ScenarioCompareItem[];
+  winner_conversion: string | null;
+  winner_revenue: string | null;
+  winner_confidence: string | null;
+  delta: ScenarioDelta | null;
+};
+
+export type ScenarioComparePayload = {
+  model_run_id: number;
+  scenario_ids: number[];
+  include_baseline: boolean;
+  include_top_path: boolean;
+};
+
 export type ModelRunCreatePayload = {
   start_date: string;
   end_date: string;
-  lookback_days: number;
+  lookback_days: number | null;  // null = usa LOOKBACK_DAYS do .env
   decay_lambda: number;
   non_conv_sample_pct: number;
   non_conv_scale: number | null;
@@ -277,5 +321,10 @@ export const api = {
   analyzeScenario: (id: number) =>
     request<ScenarioAnalysis>(`/sandbox/scenarios/${id}/analyze`, {
       method: "POST",
+    }),
+  compareScenarios: (payload: ScenarioComparePayload) =>
+    request<ScenarioCompareResponse>("/sandbox/compare", {
+      method: "POST",
+      body: JSON.stringify(payload),
     }),
 };

@@ -393,16 +393,29 @@ Criterio de aceite:
 
 Objetivo: comparar jornadas hipoteticas entre si e contra baseline.
 
+Status: concluido. Backend com endpoint `POST /sandbox/compare` em
+`gograph/backend/app/api/sandbox.py` e logica de comparacao em
+`gograph/backend/app/services/sandbox_service.py`. O servico aceita
+1-N cenarios + flags `include_baseline` e `include_top_path`, retorna
+`ScenarioCompareItem` por coluna com `winner_conversion/revenue/confidence`
+e `ScenarioDelta` (B − A) quando exatamente 2 itens. O motor de analise
+foi refatorado em `_analyze_path_channels` reutilizavel entre analise
+individual e comparacao. Frontend ganhou modo "Comparar" com toggle no
+sidebar, checkboxes de selecao, toggles de referencia (Baseline / Top
+Caminho Real) e tabela side-by-side com celulas verdes para vencedor,
+coluna de delta com positivo/negativo e alertas por item. 11 novos testes
+em `tests/test_sandbox_service.py` (24 total, todos passando).
+
 Comparacoes:
 
-- Cenario A vs B.
-- Cenario vs baseline.
-- Cenario vs top caminho real.
+- Cenario A vs B. ✓
+- Cenario vs baseline. ✓
+- Cenario vs top caminho real. ✓
 
 Criterio de aceite:
 
 - Usuario compara probabilidade, conversao, receita esperada, suporte, confianca
-  e alertas.
+  e alertas. ✓
 
 ### Sprint 10 - Segmentacao
 

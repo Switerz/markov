@@ -10,7 +10,7 @@ from typing import Optional
 from dotenv import load_dotenv
 
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 def _env_int(name: str, default: int) -> int:
@@ -66,6 +66,13 @@ SHAPLEY_SAMPLES = _env_int("SHAPLEY_SAMPLES", 5000)
 # Transition extraction batching. auto uses monthly batches for long windows.
 MODEL_BATCH_MODE = os.getenv("MODEL_BATCH_MODE", "auto")
 MODEL_BATCH_DAYS = _env_int("MODEL_BATCH_DAYS", 35)
+
+# Right-censorship horizon for non-converting journeys.
+# Non-converting users whose last session is within this many days of end_date
+# are excluded from the Non-Conversion transition counts — their journey outcome
+# is still unknown (censored). Converts units: 0 = disabled (backward-compatible).
+# Recommended values to test: 7, 14, 30.
+CENSORSHIP_DAYS = _env_int("CENSORSHIP_DAYS", 0)
 
 # Markov states — classified in SQL via utm_medium + utm_source only.
 # utm_campaign is intentionally ignored: naming conventions are inconsistent

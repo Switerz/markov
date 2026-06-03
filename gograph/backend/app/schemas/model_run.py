@@ -20,6 +20,9 @@ class ModelRunParams:
     shapley_seed: int = 42
     batch_mode: str = "auto"
     batch_days: int = 35
+    # Right-censorship: exclude non-converters whose last session is within
+    # this many days of end_date (outcome still unknown). 0 = off.
+    censorship_days: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

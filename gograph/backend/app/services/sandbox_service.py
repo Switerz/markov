@@ -114,53 +114,157 @@ def analyze_scenario(scenario_id: int, session: Session) -> dict[str, Any]:
     path_channels: list[str] = json.loads(row.path_channels_json)
     model_run_id: int = row.model_run_id
 
-    matrix_df     = get_model_run_table(model_run_id, "transition_matrix",  session=session)
-    paths_df      = get_model_run_table(model_run_id, "path_summary",       session=session)
-    transitions_df = get_model_run_table(model_run_id, "transition_counts",  session=session)
+    matrix_df      = get_model_run_table(model_run_id, "transition_matrix", session=session)
+    paths_df       = get_model_run_table(model_run_id, "path_summary",      session=session)
+    transitions_df = get_model_run_table(model_run_id, "transition_counts", session=session)
 
     model_run = session.get(ModelRun, model_run_id)
-    # observed_conversion_rate = real-world conversion rate (n_converters / total visitors)
-    # used as lift baseline — more meaningful than Markov chain P(Conversion|start)
     baseline_conv_rate = float(model_run.observed_conversion_rate or 0.0) if model_run else 0.0
     model_total_rev    = float(model_run.total_revenue) if model_run else 0.0
 
+    result = _analyze_path_channels(
+        path_channels, matrix_df, paths_df, transitions_df,
+        baseline_conv_rate, model_total_rev,
+    )
+    result["scenario_id"] = scenario_id
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Compare
+# ---------------------------------------------------------------------------
+
+def compare_scenarios(
+    model_run_id: int,
+    scenario_ids: list[int],
+    include_baseline: bool,
+    include_top_path: bool,
+    session: Session,
+) -> dict[str, Any]:
+    """Compare multiple scenarios (and optionally baseline / top real path)."""
+    from gograph.backend.app.db.models import ModelRun
+
+    if not scenario_ids and not include_baseline and not include_top_path:
+        raise ValueError("Forneça pelo menos um cenário ou ative baseline/top_path.")
+
+    model_run = session.get(ModelRun, model_run_id)
+    if model_run is None:
+        raise ValueError(f"ModelRun {model_run_id} não encontrado.")
+
+    baseline_conv_rate = float(model_run.observed_conversion_rate or 0.0)
+    model_total_rev    = float(model_run.total_revenue or 0.0)
+
+    matrix_df      = get_model_run_table(model_run_id, "transition_matrix", session=session)
+    paths_df       = get_model_run_table(model_run_id, "path_summary",      session=session)
+    transitions_df = get_model_run_table(model_run_id, "transition_counts", session=session)
+
+    items: list[dict] = []
+
+    for sid in scenario_ids:
+        row = session.get(Scenario, sid)
+        if row is None:
+            raise ValueError(f"Cenário {sid} não encontrado.")
+        if row.model_run_id != model_run_id:
+            raise ValueError(
+                f"Cenário {sid} pertence ao model run {row.model_run_id}, não {model_run_id}."
+            )
+        path_channels = json.loads(row.path_channels_json)
+        metrics = _analyze_path_channels(
+            path_channels, matrix_df, paths_df, transitions_df,
+            baseline_conv_rate, model_total_rev,
+        )
+        items.append({
+            "source": "scenario",
+            "scenario_id": sid,
+            "name": row.name,
+            **{k: metrics[k] for k in _COMPARE_KEYS},
+        })
+
+    if include_baseline:
+        items.append(_get_baseline_item(matrix_df, paths_df, transitions_df, baseline_conv_rate, model_total_rev))
+
+    if include_top_path:
+        top = _get_top_real_path_item(matrix_df, paths_df, transitions_df, baseline_conv_rate, model_total_rev)
+        if top:
+            items.append(top)
+
+    if len(items) < 2:
+        raise ValueError(
+            f"Comparação requer pelo menos 2 itens; apenas {len(items)} disponível(is)."
+        )
+
+    winner_conversion = _find_winner(items, "composite_conversion_probability")
+    winner_revenue    = _find_winner(items, "expected_revenue")
+    winner_confidence = _find_winner(items, "confidence_score")
+    delta = _compute_delta(items[0], items[1]) if len(items) == 2 else None
+
+    return {
+        "items": items,
+        "winner_conversion": winner_conversion,
+        "winner_revenue": winner_revenue,
+        "winner_confidence": winner_confidence,
+        "delta": delta,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+# Keys shared between ScenarioAnalysisResponse and ScenarioCompareItem
+_COMPARE_KEYS = (
+    "path_channels",
+    "path_probability",
+    "composite_conversion_probability",
+    "historical_conversion_rate",
+    "lift",
+    "expected_revenue",
+    "expected_ticket",
+    "historical_support",
+    "confidence_score",
+    "warnings",
+)
+
+
+def _analyze_path_channels(
+    path_channels: list[str],
+    matrix_df: pd.DataFrame,
+    paths_df: pd.DataFrame,
+    transitions_df: pd.DataFrame,
+    baseline_conv_rate: float,
+    model_total_rev: float,
+) -> dict[str, Any]:
+    """Core path analysis; returns metrics dict without scenario_id."""
     warnings: list[str] = []
 
     if not path_channels:
         warnings.append("Nenhum canal definido no cenário.")
         return _empty_result(warnings)
 
-    known_states = set()
+    known_states: set[str] = set()
     if not matrix_df.empty:
         known_states = set(matrix_df["from_state"]) | set(matrix_df["to_state"])
     for ch in path_channels:
         if ch not in known_states:
             warnings.append(f"Canal hipotético ou sem dados: '{ch}'")
 
-    # --- Transition-matrix metrics ---
-    path_prob      = _path_probability(path_channels, matrix_df)
+    path_prob       = _path_probability(path_channels, matrix_df)
     conv_given_last = _conv_prob_given_last(path_channels[-1], matrix_df)
-    path_to_last   = _path_probability_no_conv(path_channels, matrix_df)
-    conv_from_last = _conv_prob_eventually(path_channels[-1], matrix_df)
-    composite      = path_to_last * conv_from_last
+    path_to_last    = _path_probability_no_conv(path_channels, matrix_df)
+    conv_from_last  = _conv_prob_eventually(path_channels[-1], matrix_df)
+    composite       = path_to_last * conv_from_last
 
-    # --- True avg ticket: total_revenue / n_converting_sessions ---
-    # Uses sum(n) of converting→Conversion transitions (decay-weighted, ≈ n_converters).
-    # Falls back to path_summary aggregation if transitions unavailable.
     avg_ticket = _avg_ticket_from_transitions(transitions_df, model_total_rev) \
         or _avg_ticket_from_paths(paths_df, model_total_rev)
 
-    # --- Historical metrics from similar paths ---
     historical_support, similar = _historical_support(path_channels, paths_df)
     hist_conv_rate = _historical_conversion_rate(similar)
 
-    # --- Expected revenue: support × hist_conv_rate × avg_ticket (negocialmente útil) ---
-    if historical_support > 0 and hist_conv_rate > 0 and avg_ticket > 0:
-        expected_revenue = float(historical_support) * hist_conv_rate * avg_ticket
-    else:
-        expected_revenue = None
-
-    # --- Lift: conv rate deste padrão vs taxa de conversão observada do modelo ---
+    expected_revenue = (
+        float(historical_support) * hist_conv_rate * avg_ticket
+        if historical_support > 0 and hist_conv_rate > 0 and avg_ticket > 0
+        else None
+    )
     lift = _clean(hist_conv_rate / baseline_conv_rate) if baseline_conv_rate > 0 and hist_conv_rate > 0 else None
 
     if path_prob == 0.0 and not warnings:
@@ -168,8 +272,6 @@ def analyze_scenario(scenario_id: int, session: Session) -> dict[str, Any]:
             "Probabilidade de cadeia zero — alguma transição neste caminho não existe na matriz. "
             "Use o suporte histórico como principal métrica."
         )
-
-    # Warn if historical metrics come from very few paths (likely selection bias)
     if historical_support == 0:
         warnings.append(
             "Sem suporte histórico armazenado para este padrão. "
@@ -184,7 +286,6 @@ def analyze_scenario(scenario_id: int, session: Session) -> dict[str, Any]:
     confidence = _confidence_score(path_prob, historical_support)
 
     return {
-        "scenario_id": scenario_id,
         "path_channels": path_channels,
         "path_probability": _clean(path_prob),
         "conversion_probability_given_last_node": _clean(conv_given_last),
@@ -200,9 +301,95 @@ def analyze_scenario(scenario_id: int, session: Session) -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
+def _get_baseline_item(
+    matrix_df: pd.DataFrame,
+    paths_df: pd.DataFrame,
+    transitions_df: pd.DataFrame,
+    baseline_conv_rate: float,
+    model_total_rev: float,
+) -> dict[str, Any]:
+    avg_ticket = _avg_ticket_from_transitions(transitions_df, model_total_rev) \
+        or _avg_ticket_from_paths(paths_df, model_total_rev)
+    total_sessions = (
+        int(paths_df["count"].sum())
+        if not paths_df.empty and "count" in paths_df.columns
+        else 0
+    )
+    return {
+        "source": "baseline",
+        "scenario_id": None,
+        "name": "Baseline (modelo atual)",
+        "path_channels": [],
+        "path_probability": None,
+        "composite_conversion_probability": baseline_conv_rate if baseline_conv_rate > 0 else None,
+        "historical_conversion_rate": baseline_conv_rate if baseline_conv_rate > 0 else None,
+        "lift": 1.0,
+        "expected_revenue": model_total_rev if model_total_rev > 0 else None,
+        "expected_ticket": _clean(avg_ticket) if avg_ticket > 0 else None,
+        "historical_support": total_sessions,
+        "confidence_score": 1.0,
+        "warnings": [],
+    }
+
+
+def _get_top_real_path_item(
+    matrix_df: pd.DataFrame,
+    paths_df: pd.DataFrame,
+    transitions_df: pd.DataFrame,
+    baseline_conv_rate: float,
+    model_total_rev: float,
+) -> Optional[dict[str, Any]]:
+    if paths_df.empty or "path_text" not in paths_df.columns:
+        return None
+    sort_col = "conversion_count" if "conversion_count" in paths_df.columns else "count"
+    top_row = paths_df.sort_values(sort_col, ascending=False).iloc[0]
+    path_text = str(top_row.get("path_text", ""))
+    path_channels = [
+        n.strip() for n in path_text.split(" -> ")
+        if n.strip() not in ("(start)", "Conversion", "Non-Conversion", "")
+    ]
+    if not path_channels:
+        return None
+    metrics = _analyze_path_channels(
+        path_channels, matrix_df, paths_df, transitions_df,
+        baseline_conv_rate, model_total_rev,
+    )
+    return {
+        "source": "top_real_path",
+        "scenario_id": None,
+        "name": "Top Caminho Real",
+        **{k: metrics[k] for k in _COMPARE_KEYS},
+    }
+
+
+def _find_winner(items: list[dict], key: str) -> Optional[str]:
+    valid = [(item["name"], item[key]) for item in items if item.get(key) is not None]
+    if not valid:
+        return None
+    return max(valid, key=lambda x: x[1])[0]
+
+
+def _compute_delta(a: dict, b: dict) -> dict[str, Any]:
+    """Delta = B − A (second item minus first item)."""
+    def safe_delta(key: str) -> Optional[float]:
+        av, bv = a.get(key), b.get(key)
+        return _clean(bv - av) if av is not None and bv is not None else None
+
+    def safe_pct(key: str) -> Optional[float]:
+        av, bv = a.get(key), b.get(key)
+        if av is None or bv is None or av == 0:
+            return None
+        return _clean((bv - av) / abs(av) * 100)
+
+    return {
+        "composite_conversion_delta": safe_delta("composite_conversion_probability"),
+        "composite_conversion_pct": safe_pct("composite_conversion_probability"),
+        "expected_revenue_delta": safe_delta("expected_revenue"),
+        "expected_revenue_pct": safe_pct("expected_revenue"),
+        "confidence_delta": safe_delta("confidence_score"),
+        "historical_support_delta": safe_delta("historical_support"),
+    }
+
 
 def _path_probability(channels: list[str], matrix: pd.DataFrame) -> float:
     """P((start)→ch1→...→chN→Conversion) — full chain."""

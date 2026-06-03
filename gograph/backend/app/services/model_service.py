@@ -30,6 +30,7 @@ def params_from_config() -> ModelRunParams:
         shapley_samples=config.SHAPLEY_SAMPLES,
         batch_mode=config.MODEL_BATCH_MODE,
         batch_days=config.MODEL_BATCH_DAYS,
+        censorship_days=config.CENSORSHIP_DAYS,
     )
 
 

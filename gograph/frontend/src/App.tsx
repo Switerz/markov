@@ -49,7 +49,7 @@ type Tab =
 const defaultPayload: ModelRunCreatePayload = {
   start_date: "2026-03-01",
   end_date: "2026-03-31",
-  lookback_days: 30,
+  lookback_days: null,   // null = usa LOOKBACK_DAYS do .env (atualmente 60)
   decay_lambda: 0.05,
   non_conv_sample_pct: 1,
   non_conv_scale: null,
@@ -535,9 +535,15 @@ function Channels({
           "spend",
           "roas_markov",
           "roas_shapley",
+          "roas_first_click",
+          "roas_last_click",
           "recommendation",
         ]}
-        rows={rows}
+        rows={rows.map((r) => ({
+          ...r,
+          roas_first_click: r.first_click_roas,
+          roas_last_click: r.last_click_roas,
+        }))}
       />
     </div>
   );

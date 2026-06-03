@@ -293,9 +293,24 @@ def get_converting_transitions(
 # Non-converting transitions
 # ---------------------------------------------------------------------------
 
-def _nonconverting_sql(start_date: str, end_date: str, sample_pct: int) -> str:
+def _nonconverting_sql(
+    start_date: str,
+    end_date: str,
+    sample_pct: int,
+    censorship_days: int = 0,
+) -> str:
+    """
+    SQL for non-converting transition counts.
+
+    censorship_days: exclude users whose last session was within this many days
+    of end_date — their outcome is unknown (right-censored). 0 = no filtering
+    (backward-compatible default). Recommended values to experiment: 7, 14, 30.
+
+    The mature_journeys CTE always runs the filter:
+      last_session <= toDate(end_date) - INTERVAL censorship_days DAY
+    When censorship_days=0 the cutoff equals end_date, which all sessions satisfy.
+    """
     state_expr = _state_sql("s")
-    # Same user_id limitation as converting SQL — see note above.
     return f"""
 WITH converters AS (
     SELECT DISTINCT s_conv.user_id
@@ -319,18 +334,26 @@ journeys AS (
             arraySort(x -> x.1,
                 groupArray((toUnixTimestamp(s.`start`), {state_expr}))
             )
-        ) AS channels
+        ) AS channels,
+        max(s.`start`) AS last_session
     FROM plausible_events_db.sessions_v2 AS s FINAL
     WHERE s.user_id IN (SELECT user_id FROM sampled_users)
       AND s.`start` BETWEEN '{start_date}' AND '{end_date}'
       AND (s.utm_medium != '' OR s.acquisition_channel != '')
     GROUP BY s.user_id
 ),
+mature_journeys AS (
+    -- Exclude censored journeys: outcome still unknown within the analysis window.
+    -- When censorship_days=0 the condition is always true (backward-compatible).
+    SELECT user_id, channels
+    FROM journeys
+    WHERE last_session <= toDate('{end_date}') - INTERVAL {censorship_days} DAY
+),
 transitions AS (
     SELECT
         t.1 AS from_ch,
         t.2 AS to_ch
-    FROM journeys
+    FROM mature_journeys
     ARRAY JOIN arrayZip(
         arrayConcat(['(start)'], channels),
         arrayConcat(channels, ['Non-Conversion'])
@@ -348,21 +371,81 @@ def get_nonconverting_transitions(
     start_date: str,
     end_date: str,
     sample_pct: int = 1,
+    censorship_days: int = 0,
 ) -> pd.DataFrame:
     """
     Returns transition counts from non-converting journeys (sampled).
     Columns: from_ch, to_ch, n
 
-    Journey identity: user_pseudo_id (cookie-based).
-    Excludes users who made a purchase in the analysis window.
+    censorship_days: users whose last session is within this many days of
+    end_date are excluded (right-censored — outcome still unknown). 0 = off.
     """
-    sql = _nonconverting_sql(start_date, end_date, sample_pct)
+    sql = _nonconverting_sql(start_date, end_date, sample_pct, censorship_days)
     df = _run_query(database_id, sql)
     df["n"] = df["n"].astype(int)
     df["from_ch"] = df["from_ch"].apply(_ensure_tracked)
     df["to_ch"] = df["to_ch"].apply(_ensure_tracked)
     df = df.groupby(["from_ch", "to_ch"], as_index=False).agg(n=("n", "sum"))
     return df
+
+
+def _censored_count_sql(
+    start_date: str,
+    end_date: str,
+    sample_pct: int,
+    censorship_days: int,
+) -> str:
+    """Returns censored and total sampled non-converting journey counts."""
+    return f"""
+WITH converters AS (
+    SELECT DISTINCT s_conv.user_id
+    FROM analytics.purchases_dedup_lm_v2 AS p FINAL
+    INNER JOIN plausible_events_db.sessions_v2 AS s_conv FINAL
+        ON p.session_id = s_conv.session_id
+    WHERE p.purchase_date BETWEEN '{start_date}' AND '{end_date}'
+),
+sampled_users AS (
+    SELECT DISTINCT user_id
+    FROM plausible_events_db.sessions_v2 FINAL
+    WHERE `start` BETWEEN '{start_date}' AND '{end_date}'
+      AND (utm_medium != '' OR acquisition_channel != '')
+      AND user_id NOT IN (SELECT user_id FROM converters)
+      AND cityHash64(user_id) % 100 < {sample_pct}
+),
+last_sessions AS (
+    SELECT user_id, max(`start`) AS last_session
+    FROM plausible_events_db.sessions_v2 FINAL
+    WHERE user_id IN (SELECT user_id FROM sampled_users)
+      AND `start` BETWEEN '{start_date}' AND '{end_date}'
+    GROUP BY user_id
+)
+SELECT
+    countIf(last_session > toDate('{end_date}') - INTERVAL {censorship_days} DAY) AS censored_count,
+    count()                                                                          AS total_count
+FROM last_sessions
+"""
+
+
+def get_censored_count(
+    database_id: int,
+    start_date: str,
+    end_date: str,
+    sample_pct: int,
+    censorship_days: int,
+) -> tuple[int, int]:
+    """
+    Returns (censored_sample_count, total_sample_count) for non-converting
+    sampled journeys. Useful for transparency reporting.
+
+    censored_sample_count: journeys excluded because last session < cutoff.
+    total_sample_count: all sampled non-converting journeys before censorship.
+    Returns (0, 0) when censorship_days <= 0.
+    """
+    if censorship_days <= 0:
+        return 0, 0
+    sql = _censored_count_sql(start_date, end_date, sample_pct, censorship_days)
+    df = _run_query(database_id, sql)
+    return int(df["censored_count"].iloc[0]), int(df["total_count"].iloc[0])
 
 
 # ---------------------------------------------------------------------------
@@ -376,20 +459,40 @@ WHERE purchase_date BETWEEN '{start_date}' AND '{end_date}'
   AND user_pseudo_id != ''
 """
 
-_NCONV_SAMPLE_COUNT_SQL = """
+
+def _nconv_sample_count_sql(
+    start_date: str,
+    end_date: str,
+    sample_pct: int,
+    censorship_days: int = 0,
+) -> str:
+    """
+    Count of sampled non-converting users (mature journeys only).
+
+    When censorship_days > 0, users whose last session is within
+    censorship_days of end_date are excluded — matching the censorship applied
+    in _nonconverting_sql so that NON_CONV_SCALE auto-calibration is consistent.
+    """
+    return f"""
 WITH converters AS (
     SELECT DISTINCT s.user_id
     FROM analytics.purchases_dedup_lm_v2 AS p FINAL
     INNER JOIN plausible_events_db.sessions_v2 AS s FINAL
         ON p.session_id = s.session_id
     WHERE p.purchase_date BETWEEN '{start_date}' AND '{end_date}'
+),
+user_sessions AS (
+    SELECT user_id, max(`start`) AS last_session
+    FROM plausible_events_db.sessions_v2 FINAL
+    WHERE `start` BETWEEN '{start_date}' AND '{end_date}'
+      AND (utm_medium != '' OR acquisition_channel != '')
+      AND user_id NOT IN (SELECT user_id FROM converters)
+      AND cityHash64(user_id) % 100 < {sample_pct}
+    GROUP BY user_id
 )
-SELECT count(DISTINCT user_id) AS n
-FROM plausible_events_db.sessions_v2 FINAL
-WHERE `start` BETWEEN '{start_date}' AND '{end_date}'
-  AND (utm_medium != '' OR acquisition_channel != '')
-  AND user_id NOT IN (SELECT user_id FROM converters)
-  AND cityHash64(user_id) % 100 < {sample_pct}
+SELECT count() AS n
+FROM user_sessions
+WHERE last_session <= toDate('{end_date}') - INTERVAL {censorship_days} DAY
 """
 
 
@@ -398,20 +501,25 @@ def get_conversion_rate(
     start_date: str,
     end_date: str,
     sample_pct: int,
+    censorship_days: int = 0,
 ) -> float:
     """
     Estimate real conversion rate: n_converters / (n_converters + n_nonconverters).
-    Converters: distinct user_pseudo_id in purchases.
-    Non-converters: distinct user_id in sampled sessions, scaled up by 100/sample_pct.
-    Note: mixes two identity spaces (known limitation until user_pseudo_id is materialised).
+
+    When censorship_days > 0, mature non-converters only (last session >= cutoff)
+    are used as the denominator — consistent with what goes into the transition
+    matrix. This ensures NON_CONV_SCALE auto-calibration targets the right rate.
+
+    Note: mixes two identity spaces (user_pseudo_id for converters vs user_id for
+    non-converters) — a known limitation until user_pseudo_id is fully materialised.
     """
     n_conv = int(
         _run_query(database_id, _CONV_COUNT_SQL.format(
             start_date=start_date, end_date=end_date))["n"].iloc[0]
     )
     n_nconv_sample = int(
-        _run_query(database_id, _NCONV_SAMPLE_COUNT_SQL.format(
-            start_date=start_date, end_date=end_date, sample_pct=sample_pct))["n"].iloc[0]
+        _run_query(database_id, _nconv_sample_count_sql(
+            start_date, end_date, sample_pct, censorship_days))["n"].iloc[0]
     )
     n_nconv = n_nconv_sample * (100 / sample_pct)
     total = n_conv + n_nconv
