@@ -154,6 +154,64 @@ export type PathRow = {
 };
 
 // ---------------------------------------------------------------------------
+// Sprint 11 — Loop diagnostics
+// ---------------------------------------------------------------------------
+
+export type LoopDiagnosticRow = {
+  channel: string;
+  self_loop_count?: number | null;
+  self_loop_rate?: number | null;
+  avg_consecutive_repeats?: number | null;
+  median_consecutive_repeats?: number | null;
+  max_consecutive_repeats?: number | null;
+  loop_conversion_rate?: number | null;
+  nonloop_conversion_rate?: number | null;
+  loop_conversion_lift?: number | null;
+  exit_distribution_json?: string | null;
+  support?: number | null;
+  confidence?: string | null;
+};
+
+// ---------------------------------------------------------------------------
+// Sprint 13 — Funnel Stage Attribution
+// ---------------------------------------------------------------------------
+
+export type FunnelAttributionRow = {
+  state: string;
+  channel: string;
+  funnel_stage: string;
+  markov_weight?: number | null;
+  markov_revenue?: number | null;
+  removal_effect?: number | null;
+  shapley_weight?: number | null;
+  shapley_revenue?: number | null;
+  presence_converting?: number | null;
+  presence_nonconverting?: number | null;
+  support?: number | null;
+  confidence?: string | null;
+};
+
+// ---------------------------------------------------------------------------
+// Sprint 14 — Sequential Effects
+// ---------------------------------------------------------------------------
+
+export type SequentialEffectRow = {
+  previous_channel: string;
+  current_channel: string;
+  pair_count?: number | null;
+  conversion_count?: number | null;
+  nonconversion_count?: number | null;
+  conversion_probability_pair?: number | null;
+  conversion_probability_baseline?: number | null;
+  lift_vs_baseline?: number | null;
+  avg_ticket?: number | null;
+  revenue?: number | null;
+  support?: number | null;
+  confidence?: string | null;
+  diagnostic_label?: string | null;
+};
+
+// ---------------------------------------------------------------------------
 // Sandbox types
 // ---------------------------------------------------------------------------
 
@@ -294,6 +352,14 @@ export const api = {
     request<TableResponse<PathRow>>(`/model-runs/${id}/paths`),
   getLoops: (id: number) =>
     request<TableResponse<PathRow>>(`/model-runs/${id}/loops`),
+  getLoopDiagnostics: (id: number) =>
+    request<TableResponse<LoopDiagnosticRow>>(`/model-runs/${id}/loop-diagnostics`),
+  getFunnelAttribution: (id: number) =>
+    request<TableResponse<FunnelAttributionRow>>(`/model-runs/${id}/funnel-attribution`),
+  getSequentialEffects: (id: number, prevChannel?: string) =>
+    request<TableResponse<SequentialEffectRow>>(
+      `/model-runs/${id}/sequential-effects${prevChannel ? `?previous_channel=${encodeURIComponent(prevChannel)}` : ""}`
+    ),
   createRun: (payload: ModelRunCreatePayload) =>
     request<ModelRun>("/model-runs", {
       method: "POST",

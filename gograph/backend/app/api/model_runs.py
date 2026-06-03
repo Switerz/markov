@@ -212,6 +212,60 @@ def get_data_quality(
     return _table_response(model_run_id, "data_quality_checks", session)
 
 
+# ---------------------------------------------------------------------------
+# Sprint 11 — Loop diagnostics
+# ---------------------------------------------------------------------------
+
+@router.get("/{model_run_id}/loop-diagnostics", response_model=TableResponse)
+def get_loop_diagnostics(
+    model_run_id: int,
+    session: Session = Depends(get_db_session),
+):
+    """Per-channel loop statistics: self-loop rates, conversion lift, exit distribution."""
+    return _table_response(model_run_id, "loop_diagnostics", session)
+
+
+# ---------------------------------------------------------------------------
+# Sprint 13 — Funnel Stage Attribution
+# ---------------------------------------------------------------------------
+
+@router.get("/{model_run_id}/funnel-attribution", response_model=TableResponse)
+def get_funnel_attribution(
+    model_run_id: int,
+    channel: str | None = None,
+    session: Session = Depends(get_db_session),
+):
+    """Markov/Shapley attribution per composite state (channel / funnel_stage)."""
+    _ensure_run_exists(model_run_id, session)
+    df = get_model_run_table(model_run_id, "funnel_state_attribution", session=session)
+    if not df.empty and channel:
+        df = df[df["channel"] == channel]
+    rows = [] if df.empty else df.to_dict("records")
+    return {"model_run_id": model_run_id, "table": "funnel_state_attribution", "rows": rows}
+
+
+# ---------------------------------------------------------------------------
+# Sprint 14 — Sequential Effects
+# ---------------------------------------------------------------------------
+
+@router.get("/{model_run_id}/sequential-effects", response_model=TableResponse)
+def get_sequential_effects(
+    model_run_id: int,
+    previous_channel: str | None = None,
+    label: str | None = None,
+    session: Session = Depends(get_db_session),
+):
+    """Order-2 conditional conversion probabilities for all bigram pairs."""
+    _ensure_run_exists(model_run_id, session)
+    df = get_model_run_table(model_run_id, "sequential_effects", session=session)
+    if not df.empty and previous_channel:
+        df = df[df["previous_channel"] == previous_channel]
+    if not df.empty and label:
+        df = df[df["diagnostic_label"] == label]
+    rows = [] if df.empty else df.to_dict("records")
+    return {"model_run_id": model_run_id, "table": "sequential_effects", "rows": rows}
+
+
 @router.get("/{model_run_id}/export")
 def get_export(
     model_run_id: int,

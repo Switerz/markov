@@ -26,11 +26,14 @@ import {
   ChannelRow,
   DataQualityRow,
   DiagnosticRow,
+  FunnelAttributionRow,
   GraphResponse,
   InsightRow,
+  LoopDiagnosticRow,
   ModelRun,
   ModelRunCreatePayload,
   PathRow,
+  SequentialEffectRow,
   TouchpointRow,
 } from "./api";
 import { SandboxView } from "./SandboxView";
@@ -44,6 +47,7 @@ type Tab =
   | "diagnostics"
   | "quality"
   | "paths"
+  | "model-diagnostics"
   | "sandbox";
 
 const defaultPayload: ModelRunCreatePayload = {
@@ -86,6 +90,10 @@ export function App() {
   const [graph, setGraph] = useState<GraphResponse | null>(null);
   const [quality, setQuality] = useState<DataQualityRow[]>([]);
   const [paths, setPaths] = useState<PathRow[]>([]);
+  const [loopDiagnostics, setLoopDiagnostics] = useState<LoopDiagnosticRow[]>([]);
+  const [funnelAttribution, setFunnelAttribution] = useState<FunnelAttributionRow[]>([]);
+  const [sequentialEffects, setSequentialEffects] = useState<SequentialEffectRow[]>([]);
+  const [diagLoaded, setDiagLoaded] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
   const [payload, setPayload] = useState<ModelRunCreatePayload>(defaultPayload);
   const [loading, setLoading] = useState(false);
@@ -180,6 +188,29 @@ export function App() {
     }, 5000);
     return () => window.clearInterval(timer);
   }, [overview?.id, overview?.status]);
+
+  async function loadModelDiagnostics(id: number) {
+    if (diagLoaded === id) return;
+    try {
+      const [loopData, funnelData, seqData] = await Promise.all([
+        api.getLoopDiagnostics(id),
+        api.getFunnelAttribution(id),
+        api.getSequentialEffects(id),
+      ]);
+      setLoopDiagnostics(loopData.rows);
+      setFunnelAttribution(funnelData.rows);
+      setSequentialEffects(seqData.rows);
+      setDiagLoaded(id);
+    } catch {
+      // Diagnostics are optional — fail silently
+    }
+  }
+
+  useEffect(() => {
+    if (tab === "model-diagnostics" && selectedId !== null) {
+      void loadModelDiagnostics(selectedId);
+    }
+  }, [tab, selectedId]);
 
   const topChannels = useMemo(
     () =>
@@ -299,6 +330,13 @@ export function App() {
             <GitGraph size={16} />
             Caminhos
           </TabButton>
+          <TabButton
+            active={tab === "model-diagnostics"}
+            onClick={() => setTab("model-diagnostics")}
+          >
+            <Activity size={16} />
+            Diagnósticos
+          </TabButton>
           <TabButton active={tab === "sandbox"} onClick={() => setTab("sandbox")}>
             <FlaskConical size={16} />
             Sandbox
@@ -332,6 +370,14 @@ export function App() {
         )}
         {!loading && overview && tab === "quality" && <Quality rows={quality} />}
         {!loading && overview && tab === "paths" && <Paths rows={paths} />}
+        {tab === "model-diagnostics" && selectedId !== null && (
+          <ModelDiagnostics
+            loopDiagnostics={loopDiagnostics}
+            funnelAttribution={funnelAttribution}
+            sequentialEffects={sequentialEffects}
+            channels={channels}
+          />
+        )}
         {tab === "sandbox" && selectedId !== null && (
           <SandboxView modelRunId={selectedId} />
         )}
@@ -911,6 +957,326 @@ function Paths({ rows }: { rows: PathRow[] }) {
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sprint 15 — Model Diagnostics (Loops + Funnel Stage + Sequential Effects)
+// ---------------------------------------------------------------------------
+
+const STAGE_COLORS: Record<string, string> = {
+  "Low Intent": "#94a3b8",
+  "Product Interest": "#3b82f6",
+  "Cart Intent": "#f59e0b",
+  "Purchase": "#16a34a",
+};
+
+const LABEL_COLORS: Record<string, string> = {
+  positive_assist: "#16a34a",
+  negative_assist: "#dc2626",
+  neutral: "#64748b",
+  possible_loop: "#9333ea",
+  low_support: "#94a3b8",
+};
+
+function ConfidenceBadge({ value }: { value: string | null | undefined }) {
+  const color = value === "high" ? "#16a34a" : value === "medium" ? "#f59e0b" : "#94a3b8";
+  return (
+    <span style={{ fontSize: "0.7rem", padding: "1px 6px", borderRadius: 4, background: color + "22", color, fontWeight: 600, border: `1px solid ${color}44` }}>
+      {value ?? "low"}
+    </span>
+  );
+}
+
+function ModelDiagnostics({
+  loopDiagnostics,
+  funnelAttribution,
+  sequentialEffects,
+  channels,
+}: {
+  loopDiagnostics: LoopDiagnosticRow[];
+  funnelAttribution: FunnelAttributionRow[];
+  sequentialEffects: SequentialEffectRow[];
+  channels: ChannelRow[];
+}) {
+  const [seqFilter, setSeqFilter] = useState<string>("Paid Meta Ads");
+  const metaChannel = "Paid Meta Ads";
+
+  // Funnel attribution aggregated by channel
+  const funnelByChannel = useMemo(() => {
+    const map: Record<string, FunnelAttributionRow[]> = {};
+    funnelAttribution.forEach((row) => {
+      if (!map[row.channel]) map[row.channel] = [];
+      map[row.channel].push(row);
+    });
+    return map;
+  }, [funnelAttribution]);
+
+  const channelNames = useMemo(
+    () => Array.from(new Set(sequentialEffects.map((r) => r.previous_channel))).sort(),
+    [sequentialEffects],
+  );
+
+  const filteredSeq = useMemo(
+    () => sequentialEffects.filter((r) => r.previous_channel === seqFilter),
+    [sequentialEffects, seqFilter],
+  );
+
+  const hasLoops = loopDiagnostics.length > 0;
+  const hasFunnel = funnelAttribution.length > 0;
+  const hasSeq = sequentialEffects.length > 0;
+  const hasAny = hasLoops || hasFunnel || hasSeq;
+
+  if (!hasAny) {
+    return (
+      <div className="empty-state">
+        <h2>Diagnósticos ainda não disponíveis</h2>
+        <p>Execute um novo model run para gerar diagnósticos de loops, estágio de funil e efeitos sequenciais.</p>
+        <p className="muted" style={{ marginTop: 8 }}>Os diagnósticos de loop e efeitos sequenciais são gerados automaticamente. O modelo de estágio de funil requer acesso à tabela Events V2.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="panel-stack">
+      {/* ---- NOTA METODOLÓGICA ---- */}
+      <div className="how-to-read">
+        <strong>Camadas diagnósticas — não são atribuição oficial</strong>
+        <ul>
+          <li><strong>Markov/Shapley Raw</strong> continua sendo o modelo oficial de atribuição.</li>
+          <li><strong>Loop Diagnostics</strong>: presença e impacto de auto-loops por canal.</li>
+          <li><strong>Funnel Stage</strong>: Markov com estados compostos (canal / estágio de intenção). Requer Events V2.</li>
+          <li><strong>Efeitos Sequenciais</strong>: P(Conversão | anterior, atual) vs P(Conversão | atual). Diagnóstico de ordem 2.</li>
+        </ul>
+      </div>
+
+      {/* ---- LOOP DIAGNOSTICS ---- */}
+      {hasLoops && (
+        <section className="chart-band">
+          <header>
+            <h2>Diagnóstico de Loops (Sprint 11)</h2>
+            <span>{loopDiagnostics.length} canais</span>
+          </header>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Canal</th>
+                  <th>Loop rate</th>
+                  <th>Repeats (avg)</th>
+                  <th>Repeats (max)</th>
+                  <th>Conv. c/ loop</th>
+                  <th>Conv. sem loop</th>
+                  <th>Lift</th>
+                  <th>Suporte</th>
+                  <th>Confiança</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loopDiagnostics.map((row, i) => {
+                  const lift = row.loop_conversion_lift;
+                  const liftColor = lift == null ? "#64748b" : lift > 1.05 ? "#16a34a" : lift < 0.95 ? "#dc2626" : "#64748b";
+                  return (
+                    <tr key={i}>
+                      <td><strong>{row.channel}</strong></td>
+                      <td>{row.self_loop_rate != null ? fmtPct.format(row.self_loop_rate) : "n/d"}</td>
+                      <td>{row.avg_consecutive_repeats != null ? fmtNumber.format(row.avg_consecutive_repeats) : "n/d"}</td>
+                      <td>{row.max_consecutive_repeats ?? "n/d"}</td>
+                      <td>{row.loop_conversion_rate != null ? fmtPct.format(row.loop_conversion_rate) : "n/d"}</td>
+                      <td>{row.nonloop_conversion_rate != null ? fmtPct.format(row.nonloop_conversion_rate) : "n/d"}</td>
+                      <td style={{ color: liftColor, fontWeight: 600 }}>
+                        {lift != null ? fmtNumber.format(lift) + "×" : "n/d"}
+                      </td>
+                      <td>{row.support ?? "n/d"}</td>
+                      <td><ConfidenceBadge value={row.confidence} /></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* ---- FUNNEL STAGE ATTRIBUTION ---- */}
+      {hasFunnel && (
+        <section className="chart-band">
+          <header>
+            <h2>Atribuição por Estágio de Funil (Sprint 13)</h2>
+            <span>{funnelAttribution.length} estados compostos</span>
+          </header>
+
+          {/* Meta decomposition */}
+          {funnelByChannel[metaChannel] && (
+            <div style={{ marginBottom: "1rem" }}>
+              <h3 style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: 8 }}>Decomposição Paid Meta Ads</h3>
+              <div className="kpi-grid compact">
+                {funnelByChannel[metaChannel].map((row) => (
+                  <article className="kpi" key={row.state} style={{ borderLeft: `3px solid ${STAGE_COLORS[row.funnel_stage] ?? "#64748b"}` }}>
+                    <span>{row.funnel_stage}</span>
+                    <strong>{row.markov_weight != null ? fmtPct.format(row.markov_weight) : "n/d"}</strong>
+                    <small style={{ color: "#64748b", fontSize: "0.7rem" }}>Shapley: {row.shapley_weight != null ? fmtPct.format(row.shapley_weight) : "n/d"}</small>
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Canal</th>
+                  <th>Estágio</th>
+                  <th>Markov wt</th>
+                  <th>Shapley wt</th>
+                  <th>Remoção</th>
+                  <th>Presença conv.</th>
+                  <th>Presença n-conv.</th>
+                  <th>Suporte</th>
+                  <th>Conf.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {funnelAttribution.map((row, i) => (
+                  <tr key={i}>
+                    <td>{row.channel}</td>
+                    <td>
+                      <span style={{ color: STAGE_COLORS[row.funnel_stage] ?? "#64748b", fontWeight: 600 }}>
+                        {row.funnel_stage}
+                      </span>
+                    </td>
+                    <td>{row.markov_weight != null ? fmtPct.format(row.markov_weight) : "n/d"}</td>
+                    <td>{row.shapley_weight != null ? fmtPct.format(row.shapley_weight) : "n/d"}</td>
+                    <td>{row.removal_effect != null ? fmtPct.format(row.removal_effect) : "n/d"}</td>
+                    <td>{row.presence_converting != null ? fmtPct.format(row.presence_converting) : "n/d"}</td>
+                    <td>{row.presence_nonconverting != null ? fmtPct.format(row.presence_nonconverting) : "n/d"}</td>
+                    <td>{row.support ?? "n/d"}</td>
+                    <td><ConfidenceBadge value={row.confidence} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* ---- SEQUENTIAL EFFECTS ---- */}
+      {hasSeq && (
+        <section className="chart-band">
+          <header>
+            <h2>Efeitos Sequenciais — Ordem 2 (Sprint 14)</h2>
+            <span>{sequentialEffects.length} pares</span>
+          </header>
+          <p className="muted" style={{ marginBottom: 8 }}>
+            P(Conv | anterior → atual) vs P(Conv | atual). Lift &gt; 1 = o canal anterior ajuda. Este é um diagnóstico — não é atribuição oficial.
+          </p>
+
+          {/* Filter by previous channel */}
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+            {channelNames.map((ch) => (
+              <button
+                key={ch}
+                className={`tab${seqFilter === ch ? " active" : ""}`}
+                style={{ fontSize: "0.7rem", padding: "0.2rem 0.6rem" }}
+                onClick={() => setSeqFilter(ch)}
+              >
+                {ch}
+              </button>
+            ))}
+          </div>
+
+          {filteredSeq.length === 0 ? (
+            <p className="muted">Nenhum par encontrado para {seqFilter}.</p>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Anterior</th>
+                    <th>Atual</th>
+                    <th>Pares</th>
+                    <th>Conv.</th>
+                    <th>P(Conv | par)</th>
+                    <th>P(Conv | atual)</th>
+                    <th>Lift</th>
+                    <th>Ticket médio</th>
+                    <th>Label</th>
+                    <th>Conf.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredSeq.map((row, i) => {
+                    const lift = row.lift_vs_baseline;
+                    const label = row.diagnostic_label ?? "";
+                    const liftColor = LABEL_COLORS[label] ?? "#64748b";
+                    return (
+                      <tr key={i}>
+                        <td>{row.previous_channel}</td>
+                        <td><strong>{row.current_channel}</strong></td>
+                        <td>{fmtNumber.format(row.pair_count ?? 0)}</td>
+                        <td>{fmtNumber.format(row.conversion_count ?? 0)}</td>
+                        <td>{row.conversion_probability_pair != null ? fmtPct.format(row.conversion_probability_pair) : "n/d"}</td>
+                        <td>{row.conversion_probability_baseline != null ? fmtPct.format(row.conversion_probability_baseline) : "n/d"}</td>
+                        <td style={{ color: liftColor, fontWeight: 600 }}>
+                          {lift != null ? fmtNumber.format(lift) + "×" : "n/d"}
+                        </td>
+                        <td>{row.avg_ticket != null ? fmtMoney.format(row.avg_ticket) : "n/d"}</td>
+                        <td>
+                          <span style={{ color: liftColor, fontSize: "0.75rem", fontWeight: 600 }}>
+                            {label.replace("_", " ")}
+                          </span>
+                        </td>
+                        <td><ConfidenceBadge value={row.confidence} /></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ---- COMPARISON: Raw vs Funnel ---- */}
+      {hasFunnel && channels.length > 0 && (
+        <section className="chart-band">
+          <header>
+            <h2>Comparação: Raw Channel vs Funnel Stage</h2>
+            <span>atribuição oficial vs diagnóstica</span>
+          </header>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Canal</th>
+                  <th>Raw Markov</th>
+                  <th>Raw Shapley</th>
+                  <th>Funnel Markov</th>
+                  <th>Funnel Shapley</th>
+                </tr>
+              </thead>
+              <tbody>
+                {channels.map((ch, i) => {
+                  const funnelRows = funnelByChannel[ch.channel] ?? [];
+                  const funnelMarkov = funnelRows.reduce((s, r) => s + (r.markov_weight ?? 0), 0);
+                  const funnelShapley = funnelRows.reduce((s, r) => s + (r.shapley_weight ?? 0), 0);
+                  return (
+                    <tr key={i}>
+                      <td><strong>{ch.channel}</strong></td>
+                      <td>{ch.markov_weight != null ? fmtPct.format(ch.markov_weight) : "n/d"}</td>
+                      <td>{ch.shapley_weight != null ? fmtPct.format(ch.shapley_weight) : "n/d"}</td>
+                      <td>{funnelMarkov > 0 ? fmtPct.format(funnelMarkov) : "—"}</td>
+                      <td>{funnelShapley > 0 ? fmtPct.format(funnelShapley) : "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

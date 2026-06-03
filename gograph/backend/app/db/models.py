@@ -56,6 +56,18 @@ class ModelRun(Base):
         back_populates="model_run",
         cascade="all, delete-orphan",
     )
+    loop_diagnostics: Mapped[list["LoopDiagnostic"]] = relationship(
+        back_populates="model_run",
+        cascade="all, delete-orphan",
+    )
+    funnel_state_attribution: Mapped[list["FunnelStateAttribution"]] = relationship(
+        back_populates="model_run",
+        cascade="all, delete-orphan",
+    )
+    sequential_effects: Mapped[list["SequentialEffect"]] = relationship(
+        back_populates="model_run",
+        cascade="all, delete-orphan",
+    )
 
 
 class TransitionCount(Base):
@@ -199,3 +211,90 @@ ModelRun.scenarios = relationship(
 Index("ix_transition_counts_run_type", TransitionCount.model_run_id, TransitionCount.transition_type)
 Index("ix_attribution_results_run_channel", AttributionResult.model_run_id, AttributionResult.channel)
 Index("ix_channel_diagnostics_run_channel", ChannelDiagnostic.model_run_id, ChannelDiagnostic.channel)
+
+
+# ---------------------------------------------------------------------------
+# Sprint 11 — Loop Diagnostics
+# ---------------------------------------------------------------------------
+
+class LoopDiagnostic(Base):
+    """Per-channel auto-loop statistics derived from path sequences."""
+    __tablename__ = "loop_diagnostics"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    model_run_id: Mapped[int] = mapped_column(ForeignKey("model_runs.id"), index=True)
+    channel: Mapped[str] = mapped_column(String(255), index=True)
+    self_loop_count: Mapped[float | None] = mapped_column(Float, nullable=True)
+    self_loop_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    avg_consecutive_repeats: Mapped[float | None] = mapped_column(Float, nullable=True)
+    median_consecutive_repeats: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_consecutive_repeats: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Conversion rates inside vs after loops
+    loop_conversion_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    nonloop_conversion_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    loop_conversion_lift: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Exit channel distribution (top 3 stored as JSON text)
+    exit_distribution_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    support: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    confidence: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+    model_run: Mapped["ModelRun"] = relationship(back_populates="loop_diagnostics")
+
+
+# ---------------------------------------------------------------------------
+# Sprint 13 — Funnel State Attribution
+# ---------------------------------------------------------------------------
+
+class FunnelStateAttribution(Base):
+    """Markov/Shapley attribution per channel + funnel stage composite state."""
+    __tablename__ = "funnel_state_attribution"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    model_run_id: Mapped[int] = mapped_column(ForeignKey("model_runs.id"), index=True)
+    # Composite state: "Paid Meta Ads / Product Interest"
+    state: Mapped[str] = mapped_column(String(512), index=True)
+    channel: Mapped[str] = mapped_column(String(255), index=True)
+    funnel_stage: Mapped[str] = mapped_column(String(64), index=True)
+    markov_weight: Mapped[float | None] = mapped_column(Float, nullable=True)
+    markov_revenue: Mapped[float | None] = mapped_column(Float, nullable=True)
+    removal_effect: Mapped[float | None] = mapped_column(Float, nullable=True)
+    shapley_weight: Mapped[float | None] = mapped_column(Float, nullable=True)
+    shapley_revenue: Mapped[float | None] = mapped_column(Float, nullable=True)
+    presence_converting: Mapped[float | None] = mapped_column(Float, nullable=True)
+    presence_nonconverting: Mapped[float | None] = mapped_column(Float, nullable=True)
+    support: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    confidence: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+    model_run: Mapped["ModelRun"] = relationship(back_populates="funnel_state_attribution")
+
+
+# ---------------------------------------------------------------------------
+# Sprint 14 — Sequential Effects (Order-2 Diagnostics)
+# ---------------------------------------------------------------------------
+
+class SequentialEffect(Base):
+    """Order-2 conditional conversion probabilities: P(Conv | prev, current)."""
+    __tablename__ = "sequential_effects"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    model_run_id: Mapped[int] = mapped_column(ForeignKey("model_runs.id"), index=True)
+    previous_channel: Mapped[str] = mapped_column(String(255), index=True)
+    current_channel: Mapped[str] = mapped_column(String(255), index=True)
+    pair_count: Mapped[float | None] = mapped_column(Float, nullable=True)
+    conversion_count: Mapped[float | None] = mapped_column(Float, nullable=True)
+    nonconversion_count: Mapped[float | None] = mapped_column(Float, nullable=True)
+    conversion_probability_pair: Mapped[float | None] = mapped_column(Float, nullable=True)
+    conversion_probability_baseline: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lift_vs_baseline: Mapped[float | None] = mapped_column(Float, nullable=True)
+    avg_ticket: Mapped[float | None] = mapped_column(Float, nullable=True)
+    revenue: Mapped[float | None] = mapped_column(Float, nullable=True)
+    support: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    confidence: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    diagnostic_label: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    model_run: Mapped["ModelRun"] = relationship(back_populates="sequential_effects")
+
+
+Index("ix_loop_diagnostics_run_channel", LoopDiagnostic.model_run_id, LoopDiagnostic.channel)
+Index("ix_funnel_state_run_channel", FunnelStateAttribution.model_run_id, FunnelStateAttribution.channel)
+Index("ix_sequential_effects_run_pair", SequentialEffect.model_run_id, SequentialEffect.previous_channel, SequentialEffect.current_channel)

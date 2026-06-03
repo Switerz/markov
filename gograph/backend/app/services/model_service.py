@@ -6,11 +6,19 @@ from typing import Optional, Set
 import pandas as pd
 
 import config
+from extract import get_funnel_enriched_paths
 from gograph.backend.app.schemas import ModelRunParams, ModelRunResult
 from gograph.backend.app.services import (
     attribution_service, extraction_service, path_service
 )
 from gograph.backend.app.services.insight_service import compute_data_quality
+from gograph.backend.app.services.loop_service import (
+    compute_loop_diagnostics,
+)
+from gograph.backend.app.services.sequential_service import compute_sequential_effects
+from gograph.backend.app.services.funnel_markov_service import (
+    run_funnel_markov,
+)
 from gograph.backend.app.services.roas_service import (
     compute_channel_diagnostics,
     compute_roas
@@ -146,6 +154,45 @@ def run_model(
         converting_transitions,
         nonconverting_transitions,
     )
+
+    # -----------------------------------------------------------------
+    # Sprint 11 — Loop Diagnostics (works on existing raw_paths)
+    # -----------------------------------------------------------------
+    try:
+        loop_diagnostics = compute_loop_diagnostics(raw_paths) if not raw_paths.empty else pd.DataFrame()
+    except Exception:
+        loop_diagnostics = pd.DataFrame()
+
+    # -----------------------------------------------------------------
+    # Sprint 14 — Sequential Effects / Order-2 Diagnostics
+    # -----------------------------------------------------------------
+    try:
+        sequential_effects = compute_sequential_effects(raw_paths) if not raw_paths.empty else pd.DataFrame()
+    except Exception:
+        sequential_effects = pd.DataFrame()
+
+    # -----------------------------------------------------------------
+    # Sprint 13 — Funnel Stage Markov (requires Events V2, graceful fallback)
+    # -----------------------------------------------------------------
+    funnel_state_df: pd.DataFrame = pd.DataFrame()
+    funnel_channel_df: pd.DataFrame = pd.DataFrame()
+    try:
+        funnel_paths = get_funnel_enriched_paths(
+            database_id=params.db_plausible,
+            start_date=params.start_date,
+            end_date=params.end_date,
+            lookback=params.lookback_days,
+        )
+        if not funnel_paths.empty:
+            funnel_state_df, funnel_channel_df = run_funnel_markov(
+                funnel_paths=funnel_paths,
+                total_revenue=float(total_revenue),
+                non_conv_scale=scale,
+                shapley_samples=min(params.shapley_samples, 1000),
+            )
+    except Exception:
+        pass
+
     runtime_seconds = perf_counter() - started
 
     return ModelRunResult(
@@ -165,4 +212,8 @@ def run_model(
         total_spend=float(spend["spend"].sum()) if "spend" in spend.columns else 0.0,
         non_conv_scale=scale,
         runtime_seconds=runtime_seconds,
+        loop_diagnostics=loop_diagnostics if not loop_diagnostics.empty else None,
+        funnel_state_attribution=funnel_state_df if not funnel_state_df.empty else None,
+        funnel_channel_attribution=funnel_channel_df if not funnel_channel_df.empty else None,
+        sequential_effects=sequential_effects if not sequential_effects.empty else None,
     )

@@ -46,6 +46,13 @@ class ModelRunResult:
     total_spend: float
     non_conv_scale: float
     runtime_seconds: float
+    # Sprint 11 — Loop diagnostics (optional, None if paths unavailable)
+    loop_diagnostics: Optional[pd.DataFrame] = None
+    # Sprint 13 — Funnel Stage Markov (optional, None if Events V2 unavailable)
+    funnel_state_attribution: Optional[pd.DataFrame] = None
+    funnel_channel_attribution: Optional[pd.DataFrame] = None
+    # Sprint 14 — Sequential effects (optional, None if paths unavailable)
+    sequential_effects: Optional[pd.DataFrame] = None
 
     def summary(self) -> Dict[str, Any]:
         return {

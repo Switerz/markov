@@ -3,6 +3,11 @@
 import requests
 import pandas as pd
 from config import METABASE_URL, METABASE_API_KEY, TRACKED_STATES
+from gograph.backend.app.core.event_mapping import (
+    _funnel_stage_sql_case,
+    _priority_to_stage_sql,
+    EVENT_STAGE_MAPPING,
+)
 
 SPECIAL_STATES = {"Conversion", "Non-Conversion", "(start)"}
 ALL_STATES = TRACKED_STATES | SPECIAL_STATES
@@ -604,6 +609,207 @@ WHERE brand = 'gocase'
   AND channel = 'whatsapp'
   AND stat_date BETWEEN '{start_date}' AND '{end_date}'
 """
+
+
+def _session_events_sql(start_date: str, end_date: str) -> str:
+    """
+    Aggregates Events V2 by session_id for the given window, returning the
+    highest funnel-stage priority reached in each session.
+
+    Table: plausible_events_db.`Events V2`
+    Expected columns: session_id, name (event name), timestamp
+    Funnel priority: 4=Purchase, 3=Cart Intent, 2=Product Interest, 1=Low Intent
+    """
+    all_events = list(EVENT_STAGE_MAPPING.keys()) + ["session_start", "page_view"]
+    quoted = ", ".join(f"'{e}'" for e in all_events)
+    stage_case = _funnel_stage_sql_case("name")
+    stage_label = _priority_to_stage_sql("max_stage_priority")
+    return f"""
+SELECT
+    session_id,
+    max({stage_case}) AS max_stage_priority,
+    {stage_label}     AS funnel_stage,
+    count()           AS event_count
+FROM plausible_events_db.`Events V2`
+WHERE timestamp BETWEEN '{start_date}' AND '{end_date}'
+  AND name IN ({quoted})
+GROUP BY session_id
+"""
+
+
+def get_session_events(
+    database_id: int,
+    start_date: str,
+    end_date: str,
+) -> pd.DataFrame:
+    """
+    Returns the highest funnel stage reached per session in the given window.
+    Columns: session_id, funnel_stage, event_count
+
+    Falls back to an empty DataFrame on schema mismatch so the main model
+    continues to work if Events V2 is unavailable.
+    """
+    sql = _session_events_sql(start_date, end_date)
+    df = _run_query(database_id, sql)
+    if "funnel_stage" not in df.columns:
+        return pd.DataFrame(columns=["session_id", "funnel_stage", "event_count"])
+    df["session_id"] = df["session_id"].astype(str)
+    df["event_count"] = df["event_count"].astype(int)
+    return df
+
+
+def _funnel_enriched_paths_sql(
+    start_date: str,
+    end_date: str,
+    lookback: int,
+) -> str:
+    """
+    Builds converting + non-converting paths where each channel touch is
+    enriched with the funnel stage reached during that session.
+
+    State format: "channel / funnel_stage"
+      e.g. "Paid Meta Ads / Product Interest", "Google Ads / Cart Intent"
+
+    Sessions without events in Events V2 fall back to 'Low Intent'.
+    """
+    state_expr = _state_sql("s_all")
+    stage_case = _funnel_stage_sql_case("ev.name")
+    all_events = list(EVENT_STAGE_MAPPING.keys())
+    quoted = ", ".join(f"'{e}'" for e in all_events)
+
+    return f"""
+WITH purchase_info AS (
+    SELECT
+        p.user_pseudo_id,
+        sum(p.value)        AS revenue,
+        max(s_conv.`start`) AS conv_start
+    FROM analytics.purchases_dedup_lm_v2 AS p FINAL
+    INNER JOIN plausible_events_db.sessions_v2 AS s_conv FINAL
+        ON p.session_id = s_conv.session_id
+    WHERE p.purchase_date BETWEEN '{start_date}' AND '{end_date}'
+      AND p.user_pseudo_id != ''
+    GROUP BY p.user_pseudo_id
+),
+session_stages AS (
+    SELECT
+        toString(session_id)        AS session_id,
+        max({stage_case})           AS max_stage_priority
+    FROM plausible_events_db.`Events V2` AS ev
+    WHERE ev.timestamp BETWEEN toDate('{start_date}') - INTERVAL {lookback} DAY AND '{end_date}'
+      AND ev.name IN ({quoted})
+    GROUP BY session_id
+),
+converting_journeys AS (
+    SELECT
+        s_all.upid AS user_id,
+        arrayStringConcat(
+            arrayMap(x -> x.2,
+                arraySort(x -> x.1,
+                    groupArray((
+                        toUnixTimestamp(s_all.`start`),
+                        concat(
+                            {state_expr},
+                            ' / ',
+                            coalesce(se.stage_label, 'Low Intent')
+                        )
+                    ))
+                )
+            ),
+            ' -> '
+        ) AS path_sequence,
+        1          AS converted,
+        pi.revenue AS revenue
+    FROM (
+        SELECT
+            arrayElement(entry_meta.value, indexOf(entry_meta.key, 'user_pseudo_id')) AS upid,
+            toString(session_id) AS sid,
+            `start`, utm_medium, utm_source, utm_campaign, acquisition_channel
+        FROM plausible_events_db.sessions_v2 FINAL
+        WHERE `start` BETWEEN toDate('{start_date}') - INTERVAL {lookback} DAY AND '{end_date}'
+          AND has(entry_meta.key, 'user_pseudo_id')
+          AND arrayElement(entry_meta.value, indexOf(entry_meta.key, 'user_pseudo_id')) != ''
+    ) AS s_all
+    LEFT JOIN (
+        SELECT
+            session_id,
+            {_priority_to_stage_sql("max_stage_priority")} AS stage_label
+        FROM session_stages
+    ) AS se ON s_all.sid = se.session_id
+    INNER JOIN purchase_info pi
+        ON  s_all.upid = pi.user_pseudo_id
+        AND s_all.`start` <= pi.conv_start
+    GROUP BY s_all.upid, pi.revenue
+),
+nonconverting_journeys AS (
+    SELECT
+        s_all.upid          AS user_id,
+        arrayStringConcat(
+            arrayMap(x -> x.2,
+                arraySort(x -> x.1,
+                    groupArray((
+                        toUnixTimestamp(s_all.`start`),
+                        concat(
+                            {state_expr},
+                            ' / ',
+                            coalesce(se.stage_label, 'Low Intent')
+                        )
+                    ))
+                )
+            ),
+            ' -> '
+        ) AS path_sequence,
+        0            AS converted,
+        toFloat64(0) AS revenue
+    FROM (
+        SELECT
+            arrayElement(entry_meta.value, indexOf(entry_meta.key, 'user_pseudo_id')) AS upid,
+            toString(session_id) AS sid,
+            `start`, utm_medium, utm_source, utm_campaign, acquisition_channel
+        FROM plausible_events_db.sessions_v2 FINAL
+        WHERE `start` BETWEEN '{start_date}' AND '{end_date}'
+          AND has(entry_meta.key, 'user_pseudo_id')
+          AND arrayElement(entry_meta.value, indexOf(entry_meta.key, 'user_pseudo_id')) != ''
+    ) AS s_all
+    LEFT JOIN (
+        SELECT
+            session_id,
+            {_priority_to_stage_sql("max_stage_priority")} AS stage_label
+        FROM session_stages
+    ) AS se ON s_all.sid = se.session_id
+    WHERE s_all.upid NOT IN (SELECT user_pseudo_id FROM purchase_info)
+    GROUP BY s_all.upid
+)
+SELECT path_sequence, converted, sum(revenue) AS revenue, count() AS occurrences
+FROM (
+    SELECT path_sequence, converted, revenue FROM converting_journeys
+    UNION ALL
+    SELECT path_sequence, converted, revenue FROM nonconverting_journeys
+)
+GROUP BY path_sequence, converted
+ORDER BY occurrences DESC
+"""
+
+
+def get_funnel_enriched_paths(
+    database_id: int,
+    start_date: str,
+    end_date: str,
+    lookback: int = 30,
+) -> pd.DataFrame:
+    """
+    Returns path sequences where each touch is labeled 'channel / funnel_stage'.
+    Used to build the Funnel Stage Markov/Shapley model (Sprint 13).
+    Falls back to an empty DataFrame on any query failure.
+    Columns: path_sequence, converted, revenue, occurrences
+    """
+    sql = _funnel_enriched_paths_sql(start_date, end_date, lookback)
+    df = _run_query(database_id, sql)
+    if "path_sequence" not in df.columns:
+        return pd.DataFrame(columns=["path_sequence", "converted", "revenue", "occurrences"])
+    df["converted"] = df["converted"].astype(int)
+    df["revenue"] = df["revenue"].astype(float)
+    df["occurrences"] = df["occurrences"].astype(int)
+    return df
 
 
 def get_channel_spend(

@@ -17,8 +17,11 @@ from gograph.backend.app.db.models import (
     ChannelDiagnostic,
     DataQualityCheck,
     ExportRecord,
+    FunnelStateAttribution,
+    LoopDiagnostic,
     ModelRun,
     PathSummary,
+    SequentialEffect,
     TransitionCount,
     TransitionMatrixEntry,
 )
@@ -120,6 +123,12 @@ def save_model_run(
     _save_channel_diagnostics(session, model_run.id, result.roas_results, result.diagnostics)
     _save_path_summary(session, model_run.id, result.top_paths)
     _save_data_quality(session, model_run.id, result.data_quality)
+    if result.loop_diagnostics is not None and not result.loop_diagnostics.empty:
+        _save_loop_diagnostics(session, model_run.id, result.loop_diagnostics)
+    if result.funnel_state_attribution is not None and not result.funnel_state_attribution.empty:
+        _save_funnel_state_attribution(session, model_run.id, result.funnel_state_attribution)
+    if result.sequential_effects is not None and not result.sequential_effects.empty:
+        _save_sequential_effects(session, model_run.id, result.sequential_effects)
 
     return model_run.id
 
@@ -219,6 +228,9 @@ def get_model_run_table(
         "path_summary": PathSummary,
         "data_quality_checks": DataQualityCheck,
         "exports": ExportRecord,
+        "loop_diagnostics": LoopDiagnostic,
+        "funnel_state_attribution": FunnelStateAttribution,
+        "sequential_effects": SequentialEffect,
     }
     model = model_by_table.get(table_name)
     if model is None:
@@ -244,6 +256,9 @@ def clear_database(database_url: str | None = None) -> None:
             PathSummary,
             DataQualityCheck,
             ExportRecord,
+            LoopDiagnostic,
+            FunnelStateAttribution,
+            SequentialEffect,
             ModelRun,
         ]
         for model in models:
@@ -399,6 +414,82 @@ def _save_data_quality(
         )
 
 
+def _save_loop_diagnostics(
+    session: Session,
+    model_run_id: int,
+    df: pd.DataFrame,
+) -> None:
+    for row in _df_records(df):
+        session.add(
+            LoopDiagnostic(
+                model_run_id=model_run_id,
+                channel=str(_row_value(row, "channel")),
+                self_loop_count=_row_value(row, "self_loop_count"),
+                self_loop_rate=_row_value(row, "self_loop_rate"),
+                avg_consecutive_repeats=_row_value(row, "avg_consecutive_repeats"),
+                median_consecutive_repeats=_row_value(row, "median_consecutive_repeats"),
+                max_consecutive_repeats=_row_value(row, "max_consecutive_repeats"),
+                loop_conversion_rate=_row_value(row, "loop_conversion_rate"),
+                nonloop_conversion_rate=_row_value(row, "nonloop_conversion_rate"),
+                loop_conversion_lift=_row_value(row, "loop_conversion_lift"),
+                exit_distribution_json=_row_value(row, "exit_distribution_json"),
+                support=_row_value(row, "support"),
+                confidence=_row_value(row, "confidence"),
+            )
+        )
+
+
+def _save_funnel_state_attribution(
+    session: Session,
+    model_run_id: int,
+    df: pd.DataFrame,
+) -> None:
+    for row in _df_records(df):
+        session.add(
+            FunnelStateAttribution(
+                model_run_id=model_run_id,
+                state=str(_row_value(row, "state")),
+                channel=str(_row_value(row, "channel")),
+                funnel_stage=str(_row_value(row, "funnel_stage")),
+                markov_weight=_row_value(row, "markov_weight"),
+                markov_revenue=_row_value(row, "markov_revenue"),
+                removal_effect=_row_value(row, "removal_effect"),
+                shapley_weight=_row_value(row, "shapley_weight"),
+                shapley_revenue=_row_value(row, "shapley_revenue"),
+                presence_converting=_row_value(row, "presence_converting"),
+                presence_nonconverting=_row_value(row, "presence_nonconverting"),
+                support=_row_value(row, "support"),
+                confidence=_row_value(row, "confidence"),
+            )
+        )
+
+
+def _save_sequential_effects(
+    session: Session,
+    model_run_id: int,
+    df: pd.DataFrame,
+) -> None:
+    for row in _df_records(df):
+        session.add(
+            SequentialEffect(
+                model_run_id=model_run_id,
+                previous_channel=str(_row_value(row, "previous_channel")),
+                current_channel=str(_row_value(row, "current_channel")),
+                pair_count=_row_value(row, "pair_count"),
+                conversion_count=_row_value(row, "conversion_count"),
+                nonconversion_count=_row_value(row, "nonconversion_count"),
+                conversion_probability_pair=_row_value(row, "conversion_probability_pair"),
+                conversion_probability_baseline=_row_value(row, "conversion_probability_baseline"),
+                lift_vs_baseline=_row_value(row, "lift_vs_baseline"),
+                avg_ticket=_row_value(row, "avg_ticket"),
+                revenue=_row_value(row, "revenue"),
+                support=_row_value(row, "support"),
+                confidence=_row_value(row, "confidence"),
+                diagnostic_label=_row_value(row, "diagnostic_label"),
+            )
+        )
+
+
 def register_export(
     model_run_id: int,
     export_type: str,
@@ -453,6 +544,9 @@ def _clear_model_run_children(session: Session, model_run_id: int) -> None:
         PathSummary,
         DataQualityCheck,
         ExportRecord,
+        LoopDiagnostic,
+        FunnelStateAttribution,
+        SequentialEffect,
     ]:
         rows = session.execute(
             select(model).where(model.model_run_id == model_run_id)
