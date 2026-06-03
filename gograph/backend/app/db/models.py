@@ -27,6 +27,7 @@ class ModelRun(Base):
     total_spend: Mapped[float] = mapped_column(Float, default=0.0)
     runtime_seconds: Mapped[float] = mapped_column(Float, default=0.0)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    funnel_model_active: Mapped[bool] = mapped_column(Integer, default=0)
 
     transition_counts: Mapped[list["TransitionCount"]] = relationship(
         back_populates="model_run",
@@ -101,6 +102,8 @@ class AttributionResult(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     model_run_id: Mapped[int] = mapped_column(ForeignKey("model_runs.id"), index=True)
+    # 'raw' = Raw Channel Markov  |  'funnel' = Funnel Stage Markov (aggregated by channel)
+    model_type: Mapped[str] = mapped_column(String(16), default="raw", index=True)
     channel: Mapped[str] = mapped_column(String(255), index=True)
     markov_weight: Mapped[float | None] = mapped_column(Float, nullable=True)
     markov_revenue: Mapped[float | None] = mapped_column(Float, nullable=True)

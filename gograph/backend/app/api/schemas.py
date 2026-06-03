@@ -33,6 +33,7 @@ class ModelRunOverviewResponse(BaseModel):
     total_spend: float
     runtime_seconds: float
     error_message: Optional[str] = None
+    funnel_model_active: Optional[bool] = None
 
 
 class TableResponse(BaseModel):

@@ -613,14 +613,14 @@ WHERE brand = 'gocase'
 
 def _session_events_sql(start_date: str, end_date: str) -> str:
     """
-    Aggregates Events V2 by session_id for the given window, returning the
-    highest funnel-stage priority reached in each session.
+    Aggregates events_v2 by session_id, returning the highest funnel-stage
+    priority reached in each session.
 
-    Table: plausible_events_db.`Events V2`
-    Expected columns: session_id, name (event name), timestamp
+    Table:  plausible_events_db.events_v2
+    Columns used: session_id (UInt64), name, timestamp
     Funnel priority: 4=Purchase, 3=Cart Intent, 2=Product Interest, 1=Low Intent
     """
-    all_events = list(EVENT_STAGE_MAPPING.keys()) + ["session_start", "page_view"]
+    all_events = [k for k in EVENT_STAGE_MAPPING.keys()]
     quoted = ", ".join(f"'{e}'" for e in all_events)
     stage_case = _funnel_stage_sql_case("name")
     stage_label = _priority_to_stage_sql("max_stage_priority")
@@ -630,7 +630,7 @@ SELECT
     max({stage_case}) AS max_stage_priority,
     {stage_label}     AS funnel_stage,
     count()           AS event_count
-FROM plausible_events_db.`Events V2`
+FROM plausible_events_db.events_v2
 WHERE timestamp BETWEEN '{start_date}' AND '{end_date}'
   AND name IN ({quoted})
 GROUP BY session_id
@@ -645,15 +645,12 @@ def get_session_events(
     """
     Returns the highest funnel stage reached per session in the given window.
     Columns: session_id, funnel_stage, event_count
-
-    Falls back to an empty DataFrame on schema mismatch so the main model
-    continues to work if Events V2 is unavailable.
     """
     sql = _session_events_sql(start_date, end_date)
     df = _run_query(database_id, sql)
     if "funnel_stage" not in df.columns:
         return pd.DataFrame(columns=["session_id", "funnel_stage", "event_count"])
-    df["session_id"] = df["session_id"].astype(str)
+    df["session_id"] = df["session_id"].astype(int)
     df["event_count"] = df["event_count"].astype(int)
     return df
 
@@ -676,6 +673,11 @@ def _funnel_enriched_paths_sql(
     stage_case = _funnel_stage_sql_case("ev.name")
     all_events = list(EVENT_STAGE_MAPPING.keys())
     quoted = ", ".join(f"'{e}'" for e in all_events)
+    # stage label subquery reused in both journey CTEs
+    stage_label_subq = (
+        f"SELECT session_id, {_priority_to_stage_sql('max_stage_priority')} AS stage_label "
+        f"FROM session_stages"
+    )
 
     return f"""
 WITH purchase_info AS (
@@ -691,10 +693,11 @@ WITH purchase_info AS (
     GROUP BY p.user_pseudo_id
 ),
 session_stages AS (
+    -- Max funnel-stage priority per session from events_v2 (UInt64 session_id)
     SELECT
-        toString(session_id)        AS session_id,
-        max({stage_case})           AS max_stage_priority
-    FROM plausible_events_db.`Events V2` AS ev
+        session_id,
+        max({stage_case}) AS max_stage_priority
+    FROM plausible_events_db.events_v2 AS ev
     WHERE ev.timestamp BETWEEN toDate('{start_date}') - INTERVAL {lookback} DAY AND '{end_date}'
       AND ev.name IN ({quoted})
     GROUP BY session_id
@@ -710,7 +713,7 @@ converting_journeys AS (
                         concat(
                             {state_expr},
                             ' / ',
-                            coalesce(se.stage_label, 'Low Intent')
+                            coalesce(nullIf(se.stage_label, ''), 'Low Intent')
                         )
                     ))
                 )
@@ -722,25 +725,21 @@ converting_journeys AS (
     FROM (
         SELECT
             arrayElement(entry_meta.value, indexOf(entry_meta.key, 'user_pseudo_id')) AS upid,
-            toString(session_id) AS sid,
+            session_id,
             `start`, utm_medium, utm_source, utm_campaign, acquisition_channel
         FROM plausible_events_db.sessions_v2 FINAL
         WHERE `start` BETWEEN toDate('{start_date}') - INTERVAL {lookback} DAY AND '{end_date}'
           AND has(entry_meta.key, 'user_pseudo_id')
           AND arrayElement(entry_meta.value, indexOf(entry_meta.key, 'user_pseudo_id')) != ''
     ) AS s_all
-    LEFT JOIN (
-        SELECT
-            session_id,
-            {_priority_to_stage_sql("max_stage_priority")} AS stage_label
-        FROM session_stages
-    ) AS se ON s_all.sid = se.session_id
+    LEFT JOIN ({stage_label_subq}) AS se ON s_all.session_id = se.session_id
     INNER JOIN purchase_info pi
         ON  s_all.upid = pi.user_pseudo_id
         AND s_all.`start` <= pi.conv_start
     GROUP BY s_all.upid, pi.revenue
 ),
 nonconverting_journeys AS (
+    -- 1% sample of non-converters (mirrors the existing non-converting SQL logic)
     SELECT
         s_all.upid          AS user_id,
         arrayStringConcat(
@@ -751,7 +750,7 @@ nonconverting_journeys AS (
                         concat(
                             {state_expr},
                             ' / ',
-                            coalesce(se.stage_label, 'Low Intent')
+                            coalesce(nullIf(se.stage_label, ''), 'Low Intent')
                         )
                     ))
                 )
@@ -763,19 +762,15 @@ nonconverting_journeys AS (
     FROM (
         SELECT
             arrayElement(entry_meta.value, indexOf(entry_meta.key, 'user_pseudo_id')) AS upid,
-            toString(session_id) AS sid,
+            session_id,
             `start`, utm_medium, utm_source, utm_campaign, acquisition_channel
         FROM plausible_events_db.sessions_v2 FINAL
         WHERE `start` BETWEEN '{start_date}' AND '{end_date}'
           AND has(entry_meta.key, 'user_pseudo_id')
           AND arrayElement(entry_meta.value, indexOf(entry_meta.key, 'user_pseudo_id')) != ''
+          AND cityHash64(arrayElement(entry_meta.value, indexOf(entry_meta.key, 'user_pseudo_id'))) % 100 < 1
     ) AS s_all
-    LEFT JOIN (
-        SELECT
-            session_id,
-            {_priority_to_stage_sql("max_stage_priority")} AS stage_label
-        FROM session_stages
-    ) AS se ON s_all.sid = se.session_id
+    LEFT JOIN ({stage_label_subq}) AS se ON s_all.session_id = se.session_id
     WHERE s_all.upid NOT IN (SELECT user_pseudo_id FROM purchase_info)
     GROUP BY s_all.upid
 )

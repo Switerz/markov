@@ -90,6 +90,7 @@ export function App() {
   const [graph, setGraph] = useState<GraphResponse | null>(null);
   const [quality, setQuality] = useState<DataQualityRow[]>([]);
   const [paths, setPaths] = useState<PathRow[]>([]);
+  const [rawChannels, setRawChannels] = useState<ChannelRow[]>([]);
   const [loopDiagnostics, setLoopDiagnostics] = useState<LoopDiagnosticRow[]>([]);
   const [funnelAttribution, setFunnelAttribution] = useState<FunnelAttributionRow[]>([]);
   const [sequentialEffects, setSequentialEffects] = useState<SequentialEffectRow[]>([]);
@@ -122,6 +123,7 @@ export function App() {
       const [
         overviewData,
         channelData,
+        rawChannelData,
         diagnosticData,
         insightData,
         touchpointData,
@@ -132,6 +134,7 @@ export function App() {
         await Promise.all([
           api.getOverview(id),
           api.getChannels(id),
+          api.getRawChannels(id),
           api.getDiagnostics(id),
           api.getInsights(id),
           api.getTouchpoints(id),
@@ -141,6 +144,7 @@ export function App() {
         ]);
       setOverview(overviewData);
       setChannels(channelData.rows);
+      setRawChannels(rawChannelData.rows);
       setDiagnostics(diagnosticData.rows);
       setInsights(insightData.rows);
       setTouchpoints(touchpointData.rows);
@@ -354,7 +358,7 @@ export function App() {
           <Overview run={overview} channels={channels} roasData={roasChartData} />
         )}
         {!loading && overview && tab === "channels" && (
-          <Channels rows={channels} chartRows={topChannels} />
+          <Channels rows={channels} chartRows={topChannels} rawRows={rawChannels} funnelActive={overview.funnel_model_active ?? false} />
         )}
         {!loading && overview && tab === "graph" && graph && (
           <GraphView graph={graph} />
@@ -482,9 +486,15 @@ function Overview({
     channels.filter((row) => Number.isFinite(row.roas_markov ?? NaN)),
     (row) => row.roas_markov ?? 0,
   );
+  const funnelActive = run.funnel_model_active ?? false;
 
   return (
     <div className="panel-stack">
+      {funnelActive && (
+        <div className="notice" style={{ background: "#eff6ff", borderColor: "#2563eb", color: "#1e40af" }}>
+          <strong>Modelo ativo: Funnel Stage Markov</strong> — atribuição por canal + estágio de intenção (Events V2). Raw Channel disponível na aba Canais para comparação.
+        </div>
+      )}
       <section className="kpi-grid">
         <Kpi label="Status" value={run.status} />
         <Kpi label="Receita total" value={fmtMoney.format(run.total_revenue)} />
@@ -545,9 +555,13 @@ function Overview({
 function Channels({
   rows,
   chartRows,
+  rawRows,
+  funnelActive,
 }: {
   rows: ChannelRow[];
   chartRows: ChannelRow[];
+  rawRows: ChannelRow[];
+  funnelActive: boolean;
 }) {
   const chartData = chartRows.map((row) => ({
     channel: compactLabel(row.channel),
@@ -555,11 +569,19 @@ function Channels({
     shapley: (row.shapley_weight ?? 0) * 100,
   }));
 
+  // Build comparison map: channel → raw markov weight
+  const rawMap = new Map(rawRows.map((r) => [r.channel, r]));
+
   return (
     <div className="panel-stack">
+      {funnelActive && (
+        <div className="how-to-read">
+          <strong>Modelo ativo: Funnel Stage Markov</strong> — os pesos abaixo são atribuição por canal agregada a partir de estados compostos (canal / estágio de intenção). A coluna <em>Raw Markov</em> mostra o modelo de canal puro para comparação.
+        </div>
+      )}
       <section className="chart-band">
         <header>
-          <h2>Pesos de atribuição</h2>
+          <h2>Pesos de atribuição{funnelActive ? " — Funnel Stage" : ""}</h2>
           <span>Top canais por Markov</span>
         </header>
         <ResponsiveContainer width="100%" height={300}>
@@ -577,6 +599,7 @@ function Channels({
         columns={[
           "channel",
           "markov_weight",
+          ...(funnelActive ? ["raw_markov_weight"] : []),
           "shapley_weight",
           "spend",
           "roas_markov",
@@ -589,6 +612,7 @@ function Channels({
           ...r,
           roas_first_click: r.first_click_roas,
           roas_last_click: r.last_click_roas,
+          raw_markov_weight: rawMap.get(r.channel)?.markov_weight ?? null,
         }))}
       />
     </div>
@@ -969,6 +993,7 @@ const STAGE_COLORS: Record<string, string> = {
   "Low Intent": "#94a3b8",
   "Product Interest": "#3b82f6",
   "Cart Intent": "#f59e0b",
+  "Checkout": "#f97316",
   "Purchase": "#16a34a",
 };
 

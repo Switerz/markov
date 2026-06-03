@@ -18,6 +18,7 @@ from gograph.backend.app.services.loop_service import (
 from gograph.backend.app.services.sequential_service import compute_sequential_effects
 from gograph.backend.app.services.funnel_markov_service import (
     run_funnel_markov,
+    compare_models,
 )
 from gograph.backend.app.services.roas_service import (
     compute_channel_diagnostics,
@@ -173,9 +174,15 @@ def run_model(
 
     # -----------------------------------------------------------------
     # Sprint 13 — Funnel Stage Markov (requires Events V2, graceful fallback)
+    # Hierarchy inversion: when funnel succeeds it becomes the PRIMARY model.
+    # Raw Channel results are preserved as baseline for comparison.
     # -----------------------------------------------------------------
     funnel_state_df: pd.DataFrame = pd.DataFrame()
     funnel_channel_df: pd.DataFrame = pd.DataFrame()
+    funnel_model_active = False
+    raw_markov_results = markov_results
+    raw_shapley_results = shapley_results
+
     try:
         funnel_paths = get_funnel_enriched_paths(
             database_id=params.db_plausible,
@@ -190,6 +197,29 @@ def run_model(
                 non_conv_scale=scale,
                 shapley_samples=min(params.shapley_samples, 1000),
             )
+        if not funnel_channel_df.empty:
+            # Promote funnel channel results to primary attribution.
+            # Drop shapley columns from the markov frame to avoid column conflicts
+            # when compute_roas later merges the separate shapley_results.
+            markov_cols = ["channel", "markov_weight", "markov_revenue", "removal_effect"]
+            extra_stage_cols = [c for c in funnel_channel_df.columns if c.startswith("markov_weight_")]
+            funnel_as_primary = funnel_channel_df[markov_cols + extra_stage_cols].copy()
+            funnel_as_primary["attribution_weight"] = funnel_as_primary["markov_weight"]
+            funnel_as_primary["attributed_revenue"] = funnel_as_primary["markov_revenue"]
+            markov_results = funnel_as_primary
+            shapley_results = funnel_channel_df[
+                ["channel", "shapley_weight", "shapley_revenue"]
+            ].copy()
+            # compute_roas expects shapley_value (raw unnormalized); use weight as proxy
+            shapley_results["shapley_value"] = shapley_results["shapley_weight"]
+            roas_results = compute_roas(
+                markov_results,
+                shapley_results,
+                spend,
+                diagnostics,
+                paid_channels=paid_channels or config.PAID_CHANNELS,
+            )
+            funnel_model_active = True
     except Exception:
         pass
 
@@ -216,4 +246,7 @@ def run_model(
         funnel_state_attribution=funnel_state_df if not funnel_state_df.empty else None,
         funnel_channel_attribution=funnel_channel_df if not funnel_channel_df.empty else None,
         sequential_effects=sequential_effects if not sequential_effects.empty else None,
+        raw_markov_results=raw_markov_results if not raw_markov_results.empty else None,
+        raw_shapley_results=raw_shapley_results if not raw_shapley_results.empty else None,
+        funnel_model_active=funnel_model_active,
     )

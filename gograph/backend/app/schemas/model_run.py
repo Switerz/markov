@@ -53,6 +53,11 @@ class ModelRunResult:
     funnel_channel_attribution: Optional[pd.DataFrame] = None
     # Sprint 14 — Sequential effects (optional, None if paths unavailable)
     sequential_effects: Optional[pd.DataFrame] = None
+    # Hierarchy inversion: raw results preserved for comparison when funnel is primary
+    raw_markov_results: Optional[pd.DataFrame] = None
+    raw_shapley_results: Optional[pd.DataFrame] = None
+    # True when funnel_channel_attribution replaced markov_results/shapley_results as primary
+    funnel_model_active: bool = False
 
     def summary(self) -> Dict[str, Any]:
         return {

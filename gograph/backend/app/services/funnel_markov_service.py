@@ -109,14 +109,24 @@ def _removal_effect_channel(
     baseline_conv: float,
 ) -> float:
     """
-    Compute removal effect for a set of composite states (all states for one channel).
-    Removes all states in channel_states simultaneously.
+    Compute removal effect for a channel: remove only its HIGH-INTENT states.
+
+    'Low Intent' sessions are excluded from the removal because they represent
+    unattributable awareness traffic. Removing them can paradoxically IMPROVE
+    conversion probability (fewer NC-bound paths), giving a misleading negative
+    removal effect. Only removing sessions where users actively engaged
+    (Product Interest / Cart Intent / Checkout / Purchase) reflects the real
+    incremental value of the channel.
     """
-    if not channel_states:
+    attributable_states = [
+        s for s in channel_states
+        if not s.endswith("/ Low Intent")
+    ]
+    if not attributable_states:
         return 0.0
     idx = {s: i for i, s in enumerate(states)}
     T_mod = T.copy()
-    for state in channel_states:
+    for state in attributable_states:
         if state not in idx:
             continue
         k = idx[state]
@@ -168,8 +178,13 @@ def run_funnel_markov(
     )
     baseline_conv = legacy_markov._conversion_probability(T, states)
 
-    # State-level removal effects
+    # State-level removal effects — skip Low Intent states (noise, not attributable)
+    # compute_removal_effects iterates all non-absorbing non-start states, so we
+    # post-filter to zero out Low Intent removal effects.
     removal_effects = legacy_markov.compute_removal_effects(T, states)
+    for state in list(removal_effects.keys()):
+        if state.endswith("/ Low Intent"):
+            removal_effects[state] = 0.0
     total_effect = sum(removal_effects.values())
 
     # Shapley values (fewer samples — this is diagnostic)
@@ -198,7 +213,12 @@ def run_funnel_markov(
 
     # --- State-level DataFrame ---
     state_rows = []
-    channel_states = _channels_in_funnel_states(states)
+    # Only consider states with a known funnel stage (filter ghost states with empty stage)
+    channel_states = {
+        ch: st_list
+        for ch, st_list in _channels_in_funnel_states(states).items()
+        if ch and not ch.endswith(" /")
+    }
 
     for state in states:
         if state in SPECIAL_STATES:

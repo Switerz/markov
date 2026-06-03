@@ -100,6 +100,7 @@ def save_model_run(
             total_spend=result.total_spend,
             runtime_seconds=result.runtime_seconds,
             error_message=None,
+            funnel_model_active=int(result.funnel_model_active),
         )
         session.add(model_run)
     else:
@@ -115,11 +116,19 @@ def save_model_run(
         model_run.total_spend = result.total_spend
         model_run.runtime_seconds = result.runtime_seconds
         model_run.error_message = None
+        model_run.funnel_model_active = int(result.funnel_model_active)
     session.flush()
 
     _save_transition_counts(session, model_run.id, result)
     _save_transition_matrix(session, model_run.id, result.transition_matrix)
-    _save_attribution_results(session, model_run.id, result.roas_results)
+    # Primary attribution (funnel when active, raw otherwise)
+    model_type = "funnel" if result.funnel_model_active else "raw"
+    _save_attribution_results(session, model_run.id, result.roas_results, model_type=model_type)
+    # Always persist raw baseline for comparison
+    if result.funnel_model_active and result.raw_markov_results is not None:
+        raw_roas = _build_raw_roas_for_persistence(result)
+        if raw_roas is not None:
+            _save_attribution_results(session, model_run.id, raw_roas, model_type="raw")
     _save_channel_diagnostics(session, model_run.id, result.roas_results, result.diagnostics)
     _save_path_summary(session, model_run.id, result.top_paths)
     _save_data_quality(session, model_run.id, result.data_quality)
@@ -310,6 +319,7 @@ def _save_attribution_results(
     session: Session,
     model_run_id: int,
     roas_results: pd.DataFrame,
+    model_type: str = "raw",
 ) -> None:
     for row in _df_records(roas_results):
         markov_weight = _row_value(row, "markov_weight", _row_value(row, "attribution_weight"))
@@ -317,6 +327,7 @@ def _save_attribution_results(
         session.add(
             AttributionResult(
                 model_run_id=model_run_id,
+                model_type=model_type,
                 channel=str(_row_value(row, "channel")),
                 markov_weight=markov_weight,
                 markov_revenue=markov_revenue,
@@ -331,6 +342,25 @@ def _save_attribution_results(
                 confidence_score=_row_value(row, "confidence_score"),
             )
         )
+
+
+def _build_raw_roas_for_persistence(result: "ModelRunResult") -> "pd.DataFrame | None":
+    """Build a minimal roas-shaped DataFrame from raw results for persistence."""
+    import config as _config
+    from gograph.backend.app.services.roas_service import compute_roas
+    if result.raw_markov_results is None or result.raw_shapley_results is None:
+        return None
+    try:
+        # diagnostics already computed from raw transitions — reuse it
+        return compute_roas(
+            result.raw_markov_results,
+            result.raw_shapley_results,
+            result.roas_results[["channel", "spend"]].drop_duplicates() if "spend" in result.roas_results.columns else pd.DataFrame(columns=["channel", "spend"]),
+            result.diagnostics,
+            paid_channels=_config.PAID_CHANNELS,
+        )
+    except Exception:
+        return None
 
 
 def _save_channel_diagnostics(
@@ -570,6 +600,7 @@ def _model_run_to_dict(run: ModelRun) -> dict[str, Any]:
         "total_spend": run.total_spend,
         "runtime_seconds": run.runtime_seconds,
         "error_message": run.error_message,
+        "funnel_model_active": bool(run.funnel_model_active) if run.funnel_model_active is not None else False,
     }
 
 

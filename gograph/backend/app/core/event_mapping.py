@@ -2,15 +2,17 @@
 Event-to-funnel-stage mapping based on Eventos Documentação.xlsx (Página1).
 
 Funnel stages (ascending priority):
-  1 = Low Intent      — session with no relevant product/cart/checkout event
-  2 = Product Interest — session with view_item or similar
-  3 = Cart Intent      — session with add_to_cart, view_cart, begin_checkout, etc.
-  4 = Purchase         — session that contains a purchase event
+  1 = Low Intent       — session with no relevant product/cart/checkout event
+  2 = Product Interest — session with view_item
+  3 = Cart Intent      — session with add_to_cart, view_cart, or start_cart
+  4 = Checkout         — session that reached begin_checkout or later checkout steps
+  5 = Purchase         — session that contains a purchase event
 
-Only events marked as relevant for tracking (ok) in the documentation are included.
-Events marked "não" for "Evento ok?" are deliberately excluded to avoid noise.
+Only events present and confirmed in events_v2 are included.
+Removed: apply_coupon (supporting action, not funnel signal), view_item_list (listing browse).
 """
 
+import re
 from typing import Dict
 
 # ---------------------------------------------------------------------------
@@ -18,25 +20,23 @@ from typing import Dict
 # ---------------------------------------------------------------------------
 EVENT_STAGE_MAPPING: Dict[str, str] = {
     # --- Product Interest ---
-    "view_item": "Product Interest",          # Funil=sim, ok
-    "view_item_list": "Product Interest",     # Funil=não, ok (listing pages)
+    "view_item": "Product Interest",          # 83M events — item page view
+    "search": "Product Interest",             # 5.7M events — site search (active intent)
 
     # --- Cart Intent ---
-    "add_to_cart": "Cart Intent",             # Funil=sim, ok
-    "add_to_cart_from_recommendation": "Cart Intent",  # Funil=não, ok
-    "view_cart": "Cart Intent",               # Funil=sim, ok
-    "start_cart": "Cart Intent",              # Funil=não, ok (legacy cart page)
-    "calculate_shipping": "Cart Intent",      # Funil=não, ok
-    "apply_coupon": "Cart Intent",            # Funil=não, ok
-    "begin_checkout": "Cart Intent",          # Funil=sim, ok — início de checkout
-    "checkout_view_registration": "Cart Intent",   # Funil=não, ok
-    "checkout_view_address": "Cart Intent",   # Funil=sim, ok
-    "submit_checkout_adress": "Cart Intent",  # Funil=sim, ok (typo original preservado)
-    "checkout_view_delivery": "Cart Intent",  # Funil=sim, ok
-    "checkout_view_payment": "Cart Intent",   # Funil=não, ok
+    "add_to_cart": "Cart Intent",             # 6.3M — added item to cart
+    "view_cart": "Cart Intent",               # 12M  — viewed cart page
+    "start_cart": "Cart Intent",              # 1.3M — loaded legacy cart page
+
+    # --- Checkout ---
+    "begin_checkout": "Checkout",             # 5.7M — clicked "finalize purchase"
+    "checkout_view_address": "Checkout",      # 6.1M — address step
+    "submit_checkout_adress": "Checkout",     # typo original; absent in table but kept for future
+    "checkout_view_delivery": "Checkout",     # 3.4M — delivery step
+    "checkout_view_payment": "Checkout",      # 1.7M — payment step
 
     # --- Purchase ---
-    "purchase": "Purchase",                   # Funil=sim, ok
+    "purchase": "Purchase",                   # 726K — confirmed purchase
 }
 
 # ---------------------------------------------------------------------------
@@ -46,10 +46,11 @@ FUNNEL_STAGE_PRIORITY: Dict[str, int] = {
     "Low Intent": 1,
     "Product Interest": 2,
     "Cart Intent": 3,
-    "Purchase": 4,
+    "Checkout": 4,
+    "Purchase": 5,
 }
 
-FUNNEL_STAGES = ["Low Intent", "Product Interest", "Cart Intent", "Purchase"]
+FUNNEL_STAGES = ["Low Intent", "Product Interest", "Cart Intent", "Checkout", "Purchase"]
 
 
 def assign_funnel_stage(event_names: list[str]) -> str:
@@ -75,51 +76,62 @@ def build_funnel_state(channel: str, funnel_stage: str) -> str:
     return f"{channel} / {funnel_stage}"
 
 
+# Regex anchored on known stage names — handles channels that contain " / "
+# e.g. "Organic Social / Instagram / Product Interest" → ("Organic Social / Instagram", "Product Interest")
+_STAGE_SUFFIX_RE = re.compile(
+    r" / (" + "|".join(re.escape(s) for s in ["Low Intent", "Product Interest", "Cart Intent", "Checkout", "Purchase"]) + r")$"
+)
+
+
 def parse_funnel_state(state: str) -> tuple[str, str]:
     """
     Parse a composite state back into (channel, funnel_stage).
+    Uses stage-anchored regex so channel names containing ' / ' are handled correctly.
     Returns (state, '') for non-composite states.
     """
-    if " / " in state:
-        parts = state.split(" / ", 1)
-        return parts[0], parts[1]
+    m = _STAGE_SUFFIX_RE.search(state)
+    if m:
+        return state[: m.start()], m.group(1)
     return state, ""
 
 
 # ClickHouse SQL fragment: maps event name to funnel priority integer.
-# Used inside the funnel-enriched SQL query.
 def _funnel_stage_sql_case(event_name_col: str = "name") -> str:
     """
     Returns a ClickHouse CASE expression that maps event names to priority ints.
-    Priority 4 = Purchase, 3 = Cart Intent, 2 = Product Interest, 1 = Low Intent.
+    Priority 5=Purchase, 4=Checkout, 3=Cart Intent, 2=Product Interest, 1=Low Intent.
     """
-    purchase_events = [k for k, v in EVENT_STAGE_MAPPING.items() if v == "Purchase"]
-    cart_events = [k for k, v in EVENT_STAGE_MAPPING.items() if v == "Cart Intent"]
-    product_events = [k for k, v in EVENT_STAGE_MAPPING.items() if v == "Product Interest"]
+    by_stage: Dict[str, list[str]] = {}
+    for event, stage in EVENT_STAGE_MAPPING.items():
+        by_stage.setdefault(stage, []).append(event)
 
     def _in_list(col: str, items: list[str]) -> str:
         quoted = ", ".join(f"'{e}'" for e in items)
         return f"{col} IN ({quoted})"
 
-    return (
-        f"CASE\n"
-        f"    WHEN {_in_list(event_name_col, purchase_events)} THEN 4\n"
-        f"    WHEN {_in_list(event_name_col, cart_events)} THEN 3\n"
-        f"    WHEN {_in_list(event_name_col, product_events)} THEN 2\n"
-        f"    ELSE 1\n"
-        f"END"
-    )
+    # Build WHEN clauses in descending priority order
+    lines = ["CASE"]
+    for stage in sorted(FUNNEL_STAGE_PRIORITY, key=lambda s: -FUNNEL_STAGE_PRIORITY[s]):
+        if stage == "Low Intent":
+            continue  # handled by ELSE
+        priority = FUNNEL_STAGE_PRIORITY[stage]
+        events = by_stage.get(stage, [])
+        if events:
+            lines.append(f"    WHEN {_in_list(event_name_col, events)} THEN {priority}")
+    lines.append("    ELSE 1")
+    lines.append("END")
+    return "\n".join(lines)
 
 
 def _priority_to_stage_sql(priority_col: str = "max_stage_priority") -> str:
     """
     ClickHouse CASE expression: converts integer priority back to stage string.
     """
-    return (
-        f"CASE {priority_col}\n"
-        f"    WHEN 4 THEN 'Purchase'\n"
-        f"    WHEN 3 THEN 'Cart Intent'\n"
-        f"    WHEN 2 THEN 'Product Interest'\n"
-        f"    ELSE 'Low Intent'\n"
-        f"END"
-    )
+    lines = [f"CASE {priority_col}"]
+    for stage, priority in sorted(FUNNEL_STAGE_PRIORITY.items(), key=lambda kv: -kv[1]):
+        if stage == "Low Intent":
+            continue
+        lines.append(f"    WHEN {priority} THEN '{stage}'")
+    lines.append("    ELSE 'Low Intent'")
+    lines.append("END")
+    return "\n".join(lines)

@@ -94,31 +94,57 @@ def get_overview(
     return get_run(model_run_id, session=session)
 
 
+def _get_channels_by_type(
+    model_run_id: int,
+    model_type: str,
+    session: Session,
+) -> dict:
+    """Shared logic: fetch attribution rows filtered by model_type, add first/last click."""
+    import pandas as pd
+    _ensure_run_exists(model_run_id, session)
+    attribution = get_model_run_table(model_run_id, "attribution_results", session=session)
+
+    if not attribution.empty and "model_type" in attribution.columns:
+        primary = attribution[attribution["model_type"] == model_type]
+        # Fallback to raw if requested type doesn't exist
+        if primary.empty and model_type != "raw":
+            primary = attribution[attribution["model_type"] == "raw"]
+    else:
+        primary = attribution
+
+    transitions = get_model_run_table(model_run_id, "transition_counts", session=session)
+    spend_df = (
+        primary[["channel", "spend"]].copy()
+        if not primary.empty and "spend" in primary.columns
+        else pd.DataFrame(columns=["channel", "spend"])
+    )
+    first_last = compute_first_last_click_roas(transitions, spend_df)
+    if not first_last.empty and not primary.empty:
+        primary = primary.merge(first_last, on="channel", how="left")
+
+    return {
+        "model_run_id": model_run_id,
+        "table": "attribution_results",
+        "rows": primary.to_dict("records") if not primary.empty else [],
+    }
+
+
 @router.get("/{model_run_id}/channels", response_model=TableResponse)
 def get_channels(
     model_run_id: int,
     session: Session = Depends(get_db_session),
 ):
-    _ensure_run_exists(model_run_id, session)
-    import pandas as pd
-    attribution = get_model_run_table(model_run_id, "attribution_results", session=session)
-    transitions = get_model_run_table(model_run_id, "transition_counts", session=session)
+    """Primary attribution — funnel model when active, raw otherwise."""
+    return _get_channels_by_type(model_run_id, "funnel", session)
 
-    spend_df = (
-        attribution[["channel", "spend"]].copy()
-        if not attribution.empty and "spend" in attribution.columns
-        else pd.DataFrame(columns=["channel", "spend"])
-    )
-    first_last = compute_first_last_click_roas(transitions, spend_df)
 
-    if not first_last.empty and not attribution.empty:
-        attribution = attribution.merge(first_last, on="channel", how="left")
-
-    return {
-        "model_run_id": model_run_id,
-        "table": "attribution_results",
-        "rows": attribution.to_dict("records") if not attribution.empty else [],
-    }
+@router.get("/{model_run_id}/raw-channels", response_model=TableResponse)
+def get_raw_channels(
+    model_run_id: int,
+    session: Session = Depends(get_db_session),
+):
+    """Raw Channel Markov baseline (always order-1, no event enrichment)."""
+    return _get_channels_by_type(model_run_id, "raw", session)
 
 
 @router.get("/{model_run_id}/diagnostics", response_model=TableResponse)

@@ -13,6 +13,7 @@ export type ModelRun = {
   total_spend: number;
   runtime_seconds: number;
   error_message?: string | null;
+  funnel_model_active?: boolean | null;
 };
 
 export type TableResponse<T = Record<string, unknown>> = {
@@ -352,6 +353,8 @@ export const api = {
     request<TableResponse<PathRow>>(`/model-runs/${id}/paths`),
   getLoops: (id: number) =>
     request<TableResponse<PathRow>>(`/model-runs/${id}/loops`),
+  getRawChannels: (id: number) =>
+    request<TableResponse<ChannelRow>>(`/model-runs/${id}/raw-channels`),
   getLoopDiagnostics: (id: number) =>
     request<TableResponse<LoopDiagnosticRow>>(`/model-runs/${id}/loop-diagnostics`),
   getFunnelAttribution: (id: number) =>
