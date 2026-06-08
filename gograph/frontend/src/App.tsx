@@ -27,6 +27,7 @@ import {
   DataQualityRow,
   DiagnosticRow,
   FunnelAttributionRow,
+  FunnelValidationRow,
   GraphResponse,
   InsightRow,
   LoopDiagnosticRow,
@@ -79,6 +80,48 @@ const fmtNumber = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 2,
 });
 
+const COLUMN_LABELS: Record<string, string> = {
+  channel: "Canal",
+  channel_role: "Papel",
+  touchpoint_role: "Papel no funil",
+  presence_converting: "Pres. conv.",
+  presence_nonconverting: "Pres. n-conv.",
+  first_touch_share: "1º toque",
+  middle_touch_share: "Meio",
+  last_touch_share: "Último toque",
+  markov_shapley_delta_pp: "Δ Markov-Shapley",
+  diagnostic_label: "Label",
+  diagnostic_text: "Diagnóstico",
+  title: "Título",
+  severity: "Severidade",
+  confidence: "Confiança",
+  description: "Descrição",
+  evidence: "Evidência",
+  recommendation: "Recomendação",
+  limitation: "Limitação",
+  conv_first_touch_share: "1º toque (conv)",
+  conv_middle_touch_share: "Meio (conv)",
+  conv_last_touch_share: "Último (conv)",
+  nonconv_first_touch_share: "1º toque (n-conv)",
+  nonconv_middle_touch_share: "Meio (n-conv)",
+  nonconv_last_touch_share: "Último (n-conv)",
+  starter_count: "Iniciadores",
+  assist_count: "Assistências",
+  closer_count: "Finalizadores",
+  dropoff_after_touch: "Abandonos",
+  check_name: "Verificação",
+  status: "Status",
+  detail: "Detalhe",
+  markov_weight: "Markov",
+  raw_markov_weight: "Raw Markov",
+  shapley_weight: "Shapley",
+  spend: "Spend",
+  roas_markov: "ROAS Markov",
+  roas_shapley: "ROAS Shapley",
+  roas_first_click: "ROAS 1º Click",
+  roas_last_click: "ROAS Last Click",
+};
+
 export function App() {
   const [runs, setRuns] = useState<ModelRun[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -93,6 +136,7 @@ export function App() {
   const [rawChannels, setRawChannels] = useState<ChannelRow[]>([]);
   const [loopDiagnostics, setLoopDiagnostics] = useState<LoopDiagnosticRow[]>([]);
   const [funnelAttribution, setFunnelAttribution] = useState<FunnelAttributionRow[]>([]);
+  const [funnelValidation, setFunnelValidation] = useState<FunnelValidationRow[]>([]);
   const [sequentialEffects, setSequentialEffects] = useState<SequentialEffectRow[]>([]);
   const [diagLoaded, setDiagLoaded] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
@@ -196,13 +240,15 @@ export function App() {
   async function loadModelDiagnostics(id: number) {
     if (diagLoaded === id) return;
     try {
-      const [loopData, funnelData, seqData] = await Promise.all([
+      const [loopData, funnelData, funnelValData, seqData] = await Promise.all([
         api.getLoopDiagnostics(id),
         api.getFunnelAttribution(id),
+        api.getFunnelValidation(id),
         api.getSequentialEffects(id),
       ]);
       setLoopDiagnostics(loopData.rows);
       setFunnelAttribution(funnelData.rows);
+      setFunnelValidation(funnelValData.rows);
       setSequentialEffects(seqData.rows);
       setDiagLoaded(id);
     } catch {
@@ -324,7 +370,7 @@ export function App() {
             onClick={() => setTab("diagnostics")}
           >
             <TableProperties size={16} />
-            Diagnósticos
+            Papel do Canal
           </TabButton>
           <TabButton active={tab === "quality"} onClick={() => setTab("quality")}>
             <AlertTriangle size={16} />
@@ -341,6 +387,7 @@ export function App() {
             <Activity size={16} />
             Diagnósticos
           </TabButton>
+
           <TabButton active={tab === "sandbox"} onClick={() => setTab("sandbox")}>
             <FlaskConical size={16} />
             Sandbox
@@ -378,6 +425,7 @@ export function App() {
           <ModelDiagnostics
             loopDiagnostics={loopDiagnostics}
             funnelAttribution={funnelAttribution}
+            funnelValidation={funnelValidation}
             sequentialEffects={sequentialEffects}
             channels={channels}
             rawChannels={rawChannels}
@@ -877,20 +925,56 @@ function Diagnostics({ rows }: { rows: DiagnosticRow[] }) {
 }
 
 function Insights({ rows }: { rows: InsightRow[] }) {
+  if (rows.length === 0) {
+    return (
+      <div className="empty-state">
+        <h2>Sem insights</h2>
+        <p>Nenhum insight disponível para esta execução.</p>
+      </div>
+    );
+  }
   return (
-    <DataTable
-      columns={[
-        "channel",
-        "title",
-        "severity",
-        "confidence",
-        "description",
-        "evidence",
-        "recommendation",
-        "limitation",
-      ]}
-      rows={rows}
-    />
+    <div className="panel-stack">
+      <div className="insights-list">
+        {(rows as Array<Record<string, unknown>>).map((row, i) => (
+          <div key={i} className="insight-card">
+            <div className="insight-card-header">
+              {row.channel != null && (
+                <span className="insight-channel-tag">{String(row.channel)}</span>
+              )}
+              {row.title != null && (
+                <span className="insight-title">{String(row.title)}</span>
+              )}
+              {row.severity != null && <SeverityBadge value={String(row.severity)} />}
+              {row.confidence != null && <ConfidenceBadge value={String(row.confidence)} />}
+            </div>
+            {row.description != null && (
+              <div className="insight-section">
+                <span className="insight-section-label">Descrição</span>
+                {String(row.description)}
+              </div>
+            )}
+            {row.evidence != null && (
+              <div className="insight-section">
+                <span className="insight-section-label">Evidência</span>
+                {String(row.evidence)}
+              </div>
+            )}
+            {row.recommendation != null && (
+              <div className="insight-recommendation">
+                <span className="insight-section-label">Recomendação</span>
+                {String(row.recommendation)}
+              </div>
+            )}
+            {row.limitation != null && (
+              <p className="insight-limitation">
+                <strong>Limitação:</strong> {String(row.limitation)}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -1009,23 +1093,253 @@ const LABEL_COLORS: Record<string, string> = {
 };
 
 function ConfidenceBadge({ value }: { value: string | null | undefined }) {
-  const color = value === "high" ? "#16a34a" : value === "medium" ? "#f59e0b" : "#94a3b8";
+  if (value === "high") return <span className="badge badge-pass">Alto</span>;
+  if (value === "medium") return <span className="badge badge-warn">Médio</span>;
+  return <span className="badge badge-info">Baixo</span>;
+}
+
+function StatusBadge({ value }: { value: string }) {
+  const v = value.toLowerCase();
+  if (v === "pass" || v === "ok") return <span className="badge badge-pass">OK</span>;
+  if (v === "warn" || v === "warning") return <span className="badge badge-warn">Atenção</span>;
+  if (v === "fail" || v === "error" || v === "failed") return <span className="badge badge-fail">Falha</span>;
+  return <span className="badge badge-info">{value}</span>;
+}
+
+function SeverityBadge({ value }: { value: string }) {
+  const v = value.toLowerCase();
+  if (v === "critical") return <span className="badge badge-critical">Crítico</span>;
+  if (v === "high") return <span className="badge badge-fail">Alto</span>;
+  if (v === "medium") return <span className="badge badge-warn">Médio</span>;
+  return <span className="badge badge-info">Baixo</span>;
+}
+
+function RoleBadge({ value }: { value: string }) {
+  const v = value.toLowerCase();
+  if (v.includes("start") || v.includes("inici")) return <span className="badge badge-starter">Iniciador</span>;
+  if (v.includes("clos") || v.includes("final")) return <span className="badge badge-closer">Finalizador</span>;
+  if (v.includes("assist")) return <span className="badge badge-assist">Assistência</span>;
+  if (v.includes("mix") || v.includes("misto")) return <span className="badge badge-warn">Misto</span>;
+  return <span className="badge badge-neutral">{value}</span>;
+}
+
+function DiagLabelBadge({ value }: { value: string }) {
+  const v = value.toLowerCase();
+  if (v === "positive_assist") return <span className="badge badge-closer">Assist. +</span>;
+  if (v === "negative_assist") return <span className="badge badge-fail">Assist. −</span>;
+  if (v === "possible_loop") return <span className="badge badge-loop">Loop</span>;
+  if (v === "low_support") return <span className="badge badge-info">Baixo suporte</span>;
+  return <span className="badge badge-neutral">{value.replace(/_/g, " ")}</span>;
+}
+
+const PCT_COLUMNS = new Set([
+  "presence_converting", "presence_nonconverting",
+  "first_touch_share", "middle_touch_share", "last_touch_share",
+  "conv_first_touch_share", "conv_middle_touch_share", "conv_last_touch_share",
+  "nonconv_first_touch_share", "nonconv_middle_touch_share", "nonconv_last_touch_share",
+  "markov_weight", "raw_markov_weight", "shapley_weight",
+]);
+
+const LONG_TEXT_COLUMNS = new Set([
+  "description", "evidence", "limitation", "diagnostic_text", "detail",
+]);
+
+const INT_COLUMNS = new Set([
+  "starter_count", "assist_count", "closer_count", "dropoff_after_touch",
+]);
+
+function renderDataCell(column: string, value: unknown): ReactNode {
+  if (value == null || value === "") return <span className="cell-null">—</span>;
+
+  if (column === "status") return <StatusBadge value={String(value)} />;
+  if (column === "severity") return <SeverityBadge value={String(value)} />;
+  if (column === "confidence") return <ConfidenceBadge value={String(value)} />;
+  if (column === "channel_role" || column === "touchpoint_role") return <RoleBadge value={String(value)} />;
+  if (column === "diagnostic_label") return <DiagLabelBadge value={String(value)} />;
+
+  if (LONG_TEXT_COLUMNS.has(column)) {
+    return <span className="cell-long-text">{String(value)}</span>;
+  }
+
+  if (column === "markov_shapley_delta_pp") {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return <span className="cell-null">—</span>;
+    return (
+      <span className={n > 0.5 ? "cell-positive" : n < -0.5 ? "cell-negative" : ""}>
+        {n > 0 ? "+" : ""}{fmtNumber.format(n)} pp
+      </span>
+    );
+  }
+
+  if (PCT_COLUMNS.has(column)) {
+    const n = Number(value);
+    return Number.isFinite(n) ? fmtPct.format(n) : <span className="cell-null">—</span>;
+  }
+
+  if (column === "spend") {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? fmtMoney.format(n) : <span className="cell-null">—</span>;
+  }
+
+  if (INT_COLUMNS.has(column)) {
+    const n = Number(value);
+    return Number.isFinite(n) ? fmtNumber.format(Math.round(n)) : <span className="cell-null">—</span>;
+  }
+
+  if (typeof value === "number") {
+    if (Math.abs(value) < 1.5) return fmtPct.format(value);
+    return fmtNumber.format(value);
+  }
+
+  return String(value);
+}
+
+// ---------------------------------------------------------------------------
+// Sprint 16 — Funnel Attribution Validation components
+// ---------------------------------------------------------------------------
+
+function IntentBar({ row }: { row: FunnelValidationRow }) {
+  const total = row.funnel_markov_weight;
+  if (total === 0) return <span className="cell-null">—</span>;
+  const segments = [
+    { pct: row.low_intent_weight / total, color: "#e2e8f0", label: "Low Intent" },
+    { pct: row.product_interest_weight / total, color: "#93c5fd", label: "Product Interest" },
+    { pct: row.cart_intent_weight / total, color: "#fb923c", label: "Cart Intent" },
+    { pct: row.checkout_weight / total, color: "#f97316", label: "Checkout" },
+    { pct: row.purchase_weight / total, color: "#22c55e", label: "Purchase" },
+  ].filter((s) => s.pct > 0.001);
+  const tooltip = segments.map((s) => `${s.label}: ${fmtPct.format(s.pct)}`).join(" | ");
   return (
-    <span style={{ fontSize: "0.7rem", padding: "1px 6px", borderRadius: 4, background: color + "22", color, fontWeight: 600, border: `1px solid ${color}44` }}>
-      {value ?? "low"}
-    </span>
+    <div className="intent-bar" title={tooltip}>
+      {segments.map((seg, i) => (
+        <div
+          key={i}
+          className="intent-bar-segment"
+          style={{ width: `${seg.pct * 100}%`, background: seg.color }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function DragBadge({ score }: { score: number }) {
+  if (score > 0.7) return <span className="badge badge-fail">Alto</span>;
+  if (score > 0.3) return <span className="badge badge-warn">Moderado</span>;
+  return <span className="badge badge-closer">Baixo</span>;
+}
+
+function FunnelValidation({ rows }: { rows: FunnelValidationRow[] }) {
+  const [showExcl, setShowExcl] = useState(false);
+
+  if (rows.length === 0) return null;
+
+  const sorted = [...rows].sort((a, b) => b.low_intent_drag_score - a.low_intent_drag_score);
+  const totalFunnel = rows.reduce((s, r) => s + r.funnel_markov_weight, 0);
+  const totalLI = rows.reduce((s, r) => s + r.low_intent_weight, 0);
+  const overallDrag = totalFunnel > 0 ? totalLI / totalFunnel : 0;
+  const topDrag = sorted[0];
+  const topQual = [...rows].sort((a, b) => b.qualified_intent_share - a.qualified_intent_share)[0];
+
+  return (
+    <section className="chart-band">
+      <header>
+        <h2>Composição de Intenção por Canal</h2>
+        <label className="inline-control">
+          <input
+            type="checkbox"
+            checked={showExcl}
+            onChange={(e) => setShowExcl(e.target.checked)}
+            style={{ marginRight: 4 }}
+          />
+          Comparar sem Low Intent
+        </label>
+      </header>
+
+      <div className="how-to-read" style={{ marginBottom: 12 }}>
+        <strong>Como interpretar</strong>
+        <ul>
+          <li><strong>Low Intent (LI)</strong>: sessões sem eventos de produto — tráfego de topo de funil sem sinal de intenção ativa.</li>
+          <li><strong>Qualified Intent</strong>: Cart Intent + Checkout + Purchase — sessões com intenção confirmada de compra.</li>
+          <li><strong>Drag</strong>: quanto do peso Funnel do canal vem de LI. Alto drag não é erro — é o retrato da composição de audiência. Un canal com alto drag está comprando muito tráfego frio.</li>
+          {showExcl && <li><strong>Sem LI</strong>: peso renormalizado excluindo todos os estados Low Intent. Verde = canal ganha posição; vermelho = canal perde posição quando LI é retirado.</li>}
+        </ul>
+      </div>
+
+      <section className="kpi-grid compact" style={{ marginBottom: 12 }}>
+        <Kpi label="LI drag médio" value={fmtPct.format(overallDrag)} />
+        <Kpi
+          label="Maior drag"
+          value={`${topDrag.channel}: ${fmtPct.format(topDrag.low_intent_drag_score)}`}
+        />
+        <Kpi
+          label="Mais qualificado"
+          value={`${topQual.channel}: ${fmtPct.format(topQual.qualified_intent_share)}`}
+        />
+      </section>
+
+      <div className="table-wrap">
+        <table className="validation-table">
+          <thead>
+            <tr>
+              <th>Canal</th>
+              <th>Funnel Markov</th>
+              <th>Raw Markov</th>
+              <th>Δ vs Raw</th>
+              <th style={{ minWidth: 110 }}>Composição</th>
+              <th>Low Intent</th>
+              <th>Qualified</th>
+              {showExcl && <th>Sem LI</th>}
+              {showExcl && <th>Δ sem LI</th>}
+              <th>Drag</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((row, i) => {
+              const deltaRaw = (row.funnel_markov_weight - row.raw_markov_weight) * 100;
+              const deltaExcl = (row.markov_excl_low_intent - row.funnel_markov_weight) * 100;
+              return (
+                <tr key={i}>
+                  <td><strong>{row.channel}</strong></td>
+                  <td>{fmtPct.format(row.funnel_markov_weight)}</td>
+                  <td>{row.raw_markov_weight > 0 ? fmtPct.format(row.raw_markov_weight) : <span className="cell-null">—</span>}</td>
+                  <td>
+                    <span className={deltaRaw > 0.5 ? "cell-positive" : deltaRaw < -0.5 ? "cell-negative" : ""}>
+                      {deltaRaw > 0 ? "+" : ""}{fmtNumber.format(deltaRaw)} pp
+                    </span>
+                  </td>
+                  <td><IntentBar row={row} /></td>
+                  <td>{fmtPct.format(row.low_intent_drag_score)}</td>
+                  <td>{fmtPct.format(row.qualified_intent_share)}</td>
+                  {showExcl && <td>{fmtPct.format(row.markov_excl_low_intent)}</td>}
+                  {showExcl && (
+                    <td>
+                      <span className={deltaExcl > 0.5 ? "cell-positive" : deltaExcl < -0.5 ? "cell-negative" : ""}>
+                        {deltaExcl > 0 ? "+" : ""}{fmtNumber.format(deltaExcl)} pp
+                      </span>
+                    </td>
+                  )}
+                  <td><DragBadge score={row.low_intent_drag_score} /></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
 function ModelDiagnostics({
   loopDiagnostics,
   funnelAttribution,
+  funnelValidation,
   sequentialEffects,
   channels,
   rawChannels,
 }: {
   loopDiagnostics: LoopDiagnosticRow[];
   funnelAttribution: FunnelAttributionRow[];
+  funnelValidation: FunnelValidationRow[];
   sequentialEffects: SequentialEffectRow[];
   channels: ChannelRow[];
   rawChannels: ChannelRow[];
@@ -1055,8 +1369,9 @@ function ModelDiagnostics({
 
   const hasLoops = loopDiagnostics.length > 0;
   const hasFunnel = funnelAttribution.length > 0;
+  const hasValidation = funnelValidation.length > 0;
   const hasSeq = sequentialEffects.length > 0;
-  const hasAny = hasLoops || hasFunnel || hasSeq;
+  const hasAny = hasLoops || hasFunnel || hasValidation || hasSeq;
 
   if (!hasAny) {
     return (
@@ -1070,6 +1385,9 @@ function ModelDiagnostics({
 
   return (
     <div className="panel-stack">
+      {/* ---- SPRINT 16: FUNNEL VALIDATION ---- */}
+      {hasValidation && <FunnelValidation rows={funnelValidation} />}
+
       {/* ---- NOTA METODOLÓGICA ---- */}
       <div className="how-to-read">
         <strong>Camadas diagnósticas — não são atribuição oficial</strong>
@@ -1085,7 +1403,7 @@ function ModelDiagnostics({
       {hasLoops && (
         <section className="chart-band">
           <header>
-            <h2>Diagnóstico de Loops (Sprint 11)</h2>
+            <h2>Diagnóstico de Loops</h2>
             <span>{loopDiagnostics.length} canais</span>
           </header>
           <div className="table-wrap">
@@ -1133,7 +1451,7 @@ function ModelDiagnostics({
       {hasFunnel && (
         <section className="chart-band">
           <header>
-            <h2>Atribuição por Estágio de Funil (Sprint 13)</h2>
+            <h2>Atribuição por Estágio de Funil</h2>
             <span>{funnelAttribution.length} estados compostos</span>
           </header>
 
@@ -1196,7 +1514,7 @@ function ModelDiagnostics({
       {hasSeq && (
         <section className="chart-band">
           <header>
-            <h2>Efeitos Sequenciais — Ordem 2 (Sprint 14)</h2>
+            <h2>Efeitos Sequenciais — Ordem 2</h2>
             <span>{sequentialEffects.length} pares</span>
           </header>
           <p className="muted" style={{ marginBottom: 8 }}>
@@ -1408,21 +1726,23 @@ function DataTable<T extends Record<string, unknown>>({
         <thead>
           <tr>
             {columns.map((column) => (
-              <th key={column}>{column}</th>
+              <th key={column}>{COLUMN_LABELS[column] ?? column}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 && (
             <tr>
-              <td colSpan={columns.length}>Sem dados para esta tabela.</td>
+              <td colSpan={columns.length} style={{ color: "#94a3b8", fontStyle: "italic" }}>
+                Sem dados para esta tabela.
+              </td>
             </tr>
           )}
           {rows.map((row, index) => (
             <tr key={index}>
               {columns.map((column) => (
                 <td key={column}>
-                  {formatCell((row as Record<string, unknown>)[column])}
+                  {renderDataCell(column, (row as Record<string, unknown>)[column])}
                 </td>
               ))}
             </tr>
@@ -1565,18 +1885,6 @@ Receita: ${fmtMoney.format(node.revenue)}
 Centralidade: ${fmtNumber.format(node.degree_centrality)}`;
 }
 
-function formatCell(value: unknown) {
-  if (value === null || value === undefined || value === "") {
-    return "n/d";
-  }
-  if (typeof value === "number") {
-    if (Math.abs(value) <= 1) {
-      return fmtPct.format(value);
-    }
-    return fmtNumber.format(value);
-  }
-  return String(value);
-}
 
 function readError(err: unknown) {
   return err instanceof Error ? err.message : "Erro inesperado.";

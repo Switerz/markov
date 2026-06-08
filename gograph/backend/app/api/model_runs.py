@@ -271,6 +271,100 @@ def get_funnel_attribution(
 
 
 # ---------------------------------------------------------------------------
+# Sprint 16 — Funnel Attribution Validation
+# ---------------------------------------------------------------------------
+
+def _compute_funnel_validation(
+    state_df: "pd.DataFrame",
+    raw_map: "dict[str, float]",
+) -> "list[dict]":
+    """
+    Aggregate funnel_state_attribution by channel.
+
+    Returns per-channel: per-stage Markov weights, low_intent_drag_score,
+    qualified_intent_share (Cart + Checkout + Purchase), and
+    markov_excl_low_intent (weight renormalized after removing LI states).
+    """
+    STAGE_KEYS = {
+        "Low Intent": "low_intent",
+        "Product Interest": "product_interest",
+        "Cart Intent": "cart_intent",
+        "Checkout": "checkout",
+        "Purchase": "purchase",
+    }
+
+    channels: dict = {}
+    for _, row in state_df.iterrows():
+        ch = str(row.get("channel", "") or "")
+        stage = str(row.get("funnel_stage", "") or "")
+        weight = float(row.get("markov_weight") or 0.0)
+        if not ch:
+            continue
+        if ch not in channels:
+            channels[ch] = {k: 0.0 for k in STAGE_KEYS.values()}
+        key = STAGE_KEYS.get(stage)
+        if key:
+            channels[ch][key] += weight
+
+    rows = []
+    for ch, s in channels.items():
+        li, pi, ci, co, pu = s["low_intent"], s["product_interest"], s["cart_intent"], s["checkout"], s["purchase"]
+        total = li + pi + ci + co + pu
+        qualified = ci + co + pu
+        rows.append({
+            "channel": ch,
+            "funnel_markov_weight": total,
+            "raw_markov_weight": raw_map.get(ch, 0.0),
+            "low_intent_weight": li,
+            "product_interest_weight": pi,
+            "cart_intent_weight": ci,
+            "checkout_weight": co,
+            "purchase_weight": pu,
+            "qualified_weight": qualified,
+            "low_intent_drag_score": li / total if total > 0 else 0.0,
+            "qualified_intent_share": qualified / total if total > 0 else 0.0,
+            "markov_excl_low_intent": 0.0,  # filled below
+        })
+
+    # Renormalize weights excluding Low Intent states
+    total_excl_li = sum(r["funnel_markov_weight"] - r["low_intent_weight"] for r in rows)
+    for r in rows:
+        excl = r["funnel_markov_weight"] - r["low_intent_weight"]
+        r["markov_excl_low_intent"] = excl / total_excl_li if total_excl_li > 0 else 0.0
+
+    return sorted(rows, key=lambda r: r["funnel_markov_weight"], reverse=True)
+
+
+@router.get("/{model_run_id}/funnel-validation", response_model=TableResponse)
+def get_funnel_validation(
+    model_run_id: int,
+    session: Session = Depends(get_db_session),
+):
+    """
+    Sprint 16 — Funnel Attribution Validation.
+
+    Per-channel intent composition: low_intent_drag_score, qualified_intent_share,
+    per-stage weights, and markov_excl_low_intent (weight without Low Intent states).
+    """
+    import pandas as pd  # noqa: F401
+
+    _ensure_run_exists(model_run_id, session)
+    state_df = get_model_run_table(model_run_id, "funnel_state_attribution", session=session)
+    if state_df.empty:
+        return {"model_run_id": model_run_id, "table": "funnel_validation", "rows": []}
+
+    raw_df = get_model_run_table(model_run_id, "attribution_results", session=session)
+    raw_map: dict = {}
+    if not raw_df.empty and "model_type" in raw_df.columns:
+        raw_rows = raw_df[raw_df["model_type"] == "raw"]
+        if not raw_rows.empty:
+            raw_map = dict(zip(raw_rows["channel"], raw_rows["markov_weight"].fillna(0.0)))
+
+    rows = _compute_funnel_validation(state_df, raw_map)
+    return {"model_run_id": model_run_id, "table": "funnel_validation", "rows": rows}
+
+
+# ---------------------------------------------------------------------------
 # Sprint 14 — Sequential Effects
 # ---------------------------------------------------------------------------
 

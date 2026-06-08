@@ -797,12 +797,6 @@ td {
   background: #f8fafc;
 }
 
-.sandbox-results h3 {
-  font-size: 13px;
-  font-weight: 700;
-  margin: 0 0 12px;
-  color: #1e293b;
-}
 
 .result-warnings {
   background: #fffbeb;
@@ -817,18 +811,6 @@ td {
   color: #92400e;
 }
 
-.metrics-section {
-  margin-bottom: 10px;
-}
-.metrics-section-label {
-  display: block;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: #94a3b8;
-  margin: 10px 0 4px;
-}
 .metric-row {
   display: flex;
   flex-direction: column;
@@ -1144,4 +1126,282 @@ td {
   color: #92400e;
   display: block;
   margin-bottom: 4px;
+}
+
+/* ================================================================
+   BADGE SYSTEM
+   ================================================================ */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.badge-pass     { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+.badge-warn     { background: #fef9c3; color: #854d0e; border-color: #fde68a; }
+.badge-fail     { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
+.badge-critical { background: #fee2e2; color: #7f1d1d; border-color: #fca5a5; }
+.badge-info     { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+.badge-starter  { background: #eff6ff; color: #1e40af; border-color: #bfdbfe; }
+.badge-closer   { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
+.badge-assist   { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+.badge-neutral  { background: #f8fafc; color: #64748b; border-color: #e2e8f0; }
+.badge-loop     { background: #fdf4ff; color: #7e22ce; border-color: #e9d5ff; }
+
+/* ================================================================
+   TABLE CELL ENHANCEMENTS
+   ================================================================ */
+.cell-long-text {
+  display: block;
+  max-width: 300px;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.55;
+  font-size: 12px;
+  color: #374151;
+}
+
+.cell-null {
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.cell-positive { color: #16a34a; font-weight: 600; }
+.cell-negative { color: #dc2626; font-weight: 600; }
+
+/* ================================================================
+   INSIGHTS CARDS
+   ================================================================ */
+.insights-list {
+  display: grid;
+  gap: 12px;
+}
+
+.insight-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  padding: 14px 16px;
+  transition: box-shadow 0.12s;
+}
+.insight-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+}
+
+.insight-card-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.insight-channel-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: #1e40af;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 5px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+
+.insight-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e293b;
+  flex: 1;
+  min-width: 0;
+}
+
+.insight-section {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.insight-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #94a3b8;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.insight-recommendation {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #0c4a6e;
+  line-height: 1.6;
+  margin-top: 8px;
+}
+
+.insight-recommendation .insight-section-label {
+  color: #0369a1;
+}
+
+.insight-limitation {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+/* ================================================================
+   SANDBOX PANEL ENHANCEMENTS
+   ================================================================ */
+
+/* Results panel header with close button */
+.results-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.results-header h3 {
+  margin: 0 !important;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/* Loading indicator in results panel */
+.results-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 36px 16px;
+  gap: 12px;
+  color: #94a3b8;
+  font-size: 13px;
+  text-align: center;
+}
+
+/* CSS spinner */
+.spinner {
+  width: 22px;
+  height: 22px;
+  border: 2.5px solid #e2e8f0;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: spin 0.65s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Improve metrics-section visual grouping */
+.metrics-section {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+}
+
+.metrics-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+  display: block;
+  margin-bottom: 4px;
+}
+
+/* Scenario item node count hint */
+.scenario-meta {
+  font-size: 10px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+  pointer-events: none;
+}
+
+/* Similar path item last child */
+.similar-path-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+/* ================================================================
+   SPRINT 16 — INTENT BAR (Funnel Validation)
+   ================================================================ */
+
+.intent-bar {
+  display: flex;
+  height: 14px;
+  border-radius: 7px;
+  overflow: hidden;
+  width: 100%;
+  min-width: 90px;
+  gap: 1px;
+  background: #f1f5f9;
+  cursor: help;
+}
+
+.intent-bar-segment {
+  height: 100%;
+  transition: opacity 0.12s;
+  flex-shrink: 0;
+}
+
+.intent-bar-segment:hover {
+  opacity: 0.75;
+}
+
+/* Intent bar legend (used in how-to-read) */
+.intent-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 11px;
+  color: #475569;
+  margin-top: 6px;
+}
+
+.intent-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.intent-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* Validation table: wider channel column, compact numbers */
+.validation-table th,
+.validation-table td {
+  padding: 9px 10px;
+  font-size: 12px;
+}
+
+.validation-table th:first-child,
+.validation-table td:first-child {
+  min-width: 160px;
 }

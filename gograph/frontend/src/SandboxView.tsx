@@ -213,13 +213,10 @@ export function SandboxView({ modelRunId }: { modelRunId: number }) {
   }
 
   async function runAnalysis() {
-    // React state updates are async — get the id from saveScenario's return value
-    // directly rather than reading the stale activeId closure after save.
-    let id = activeId;
-    if (id === null) {
-      id = await saveScenario();
-    }
+    // Always save first so any canvas changes are persisted before analyzing.
+    const id = await saveScenario();
     if (id === null) return;
+    setAnalysis(null); // clear previous results immediately
     setAnalyzing(true);
     setError(null);
     try {
@@ -451,9 +448,10 @@ export function SandboxView({ modelRunId }: { modelRunId: number }) {
               <button
                 className="icon-button primary"
                 onClick={() => void runAnalysis()}
-                disabled={analyzing || nodes.length === 0}
+                disabled={analyzing || saving || nodes.length === 0}
               >
-                <Play size={15} /> {analyzing ? "Analisando…" : "Analisar"}
+                <Play size={15} />
+                {saving ? "Salvando…" : analyzing ? "Analisando…" : "Analisar"}
               </button>
             </div>
           </div>
@@ -516,10 +514,29 @@ export function SandboxView({ modelRunId }: { modelRunId: number }) {
       )}
 
       {/* Right panel: analysis results (editor mode only) */}
-      {mode === "editor" && analysis && (
+      {mode === "editor" && (analyzing || analysis) && (
         <aside className="sandbox-results">
-          <h3>Análise</h3>
+          <div className="results-header">
+            <h3>Análise</h3>
+            <button
+              className="icon-btn"
+              onClick={() => setAnalysis(null)}
+              title="Fechar painel"
+              disabled={analyzing}
+            >
+              <X size={14} />
+            </button>
+          </div>
 
+          {analyzing && (
+            <div className="results-loading">
+              <div className="spinner" />
+              <p>Analisando cenário…</p>
+            </div>
+          )}
+
+          {!analyzing && analysis && (
+          <>
           {analysis.warnings.length > 0 && (
             <div className="result-warnings">
               {analysis.warnings.map((w, i) => (
@@ -635,6 +652,8 @@ export function SandboxView({ modelRunId }: { modelRunId: number }) {
                 </div>
               ))}
             </div>
+          )}
+          </>
           )}
         </aside>
       )}

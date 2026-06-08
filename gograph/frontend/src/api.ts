@@ -193,6 +193,25 @@ export type FunnelAttributionRow = {
 };
 
 // ---------------------------------------------------------------------------
+// Sprint 16 — Funnel Attribution Validation
+// ---------------------------------------------------------------------------
+
+export type FunnelValidationRow = {
+  channel: string;
+  funnel_markov_weight: number;
+  raw_markov_weight: number;
+  low_intent_weight: number;
+  product_interest_weight: number;
+  cart_intent_weight: number;
+  checkout_weight: number;
+  purchase_weight: number;
+  qualified_weight: number;
+  low_intent_drag_score: number;
+  qualified_intent_share: number;
+  markov_excl_low_intent: number;
+};
+
+// ---------------------------------------------------------------------------
 // Sprint 14 — Sequential Effects
 // ---------------------------------------------------------------------------
 
@@ -359,6 +378,8 @@ export const api = {
     request<TableResponse<LoopDiagnosticRow>>(`/model-runs/${id}/loop-diagnostics`),
   getFunnelAttribution: (id: number) =>
     request<TableResponse<FunnelAttributionRow>>(`/model-runs/${id}/funnel-attribution`),
+  getFunnelValidation: (id: number) =>
+    request<TableResponse<FunnelValidationRow>>(`/model-runs/${id}/funnel-validation`),
   getSequentialEffects: (id: number, prevChannel?: string) =>
     request<TableResponse<SequentialEffectRow>>(
       `/model-runs/${id}/sequential-effects${prevChannel ? `?previous_channel=${encodeURIComponent(prevChannel)}` : ""}`
