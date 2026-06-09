@@ -13,14 +13,44 @@ SPECIAL_STATES = {"Conversion", "Non-Conversion", "(start)"}
 ALL_STATES = TRACKED_STATES | SPECIAL_STATES
 
 
-def _run_query(database_id: int, sql: str) -> pd.DataFrame:
-    """Execute native SQL against Metabase and return a DataFrame."""
+def _run_query(database_id: int, sql: str, no_limit: bool = False) -> pd.DataFrame:
+    """Execute native SQL against Metabase and return a DataFrame.
+
+    no_limit=True routes to /api/dataset/json which bypasses the 2000-row cap
+    that /api/dataset applies regardless of middleware flags. Use for raw_paths
+    and state-expansion extractions where the full universe matters.
+    """
     if not METABASE_URL or not METABASE_API_KEY:
         raise RuntimeError(
             "METABASE_URL and METABASE_API_KEY must be set in the environment. "
             "See .env.example for the required variables."
         )
 
+    query_body = {
+        "type": "native",
+        "native": {"query": sql, "template-tags": {}},
+        "database": database_id,
+        "parameters": [],
+    }
+
+    if no_limit:
+        # Export endpoint — returns a plain JSON array of row dicts, no cap.
+        import json as _json
+        resp = requests.post(
+            f"{METABASE_URL}/api/dataset/json",
+            headers={"x-api-key": METABASE_API_KEY},
+            data={"query": _json.dumps(query_body)},
+            timeout=600,
+        )
+        resp.raise_for_status()
+        rows = resp.json()
+        if isinstance(rows, dict) and (rows.get("status") == "failed" or rows.get("error")):
+            error = rows.get("error") or (rows.get("via") or [{}])[-1].get("error", "unknown")
+            raise RuntimeError(f"Query failed: {error}")
+        return pd.DataFrame(rows)
+
+    # Standard interactive endpoint — capped at 2000 rows for unaggregated,
+    # 10000 for aggregated. Fine for transitions/spend.
     resp = requests.post(
         f"{METABASE_URL}/api/dataset",
         headers={
@@ -28,10 +58,7 @@ def _run_query(database_id: int, sql: str) -> pd.DataFrame:
             "x-api-key": METABASE_API_KEY,
         },
         json={
-            "type": "native",
-            "native": {"query": sql, "template-tags": {}},
-            "database": database_id,
-            "parameters": [],
+            **query_body,
             "middleware": {
                 "js-int-to-string?": True,
                 "userland-query?": True,
@@ -89,7 +116,12 @@ def _state_sql(alias: str) -> str:
     )
 
 
-def _raw_paths_sql(start_date: str, end_date: str, lookback: int) -> str:
+def _raw_paths_sql(
+    start_date: str,
+    end_date: str,
+    lookback: int,
+    nonconv_sample_pct: int = 100,
+) -> str:
     """
     SQL to extract full user-level path sequences for Sprint 7 path analysis.
 
@@ -97,8 +129,10 @@ def _raw_paths_sql(start_date: str, end_date: str, lookback: int) -> str:
     are included. This prevents post-purchase CRM messages (WhatsApp confirmations,
     shipping updates) from inflating single-channel converting paths.
 
-    Non-converting paths: all sessions in the analysis window for users who made
-    no purchase.
+    Non-converting paths: sessions in the analysis window for users who made
+    no purchase. `nonconv_sample_pct` (1-100) downsamples non-converting users
+    deterministically via cityHash64 — required for full extractions to avoid
+    ClickHouse OOM on multi-million user windows.
     """
     state_expr = _state_sql("s_all")
     return f"""
@@ -165,6 +199,7 @@ def _raw_paths_sql(start_date: str, end_date: str, lookback: int) -> str:
               AND arrayElement(entry_meta.value, indexOf(entry_meta.key, 'user_pseudo_id')) != ''
         ) AS s_all
         WHERE s_all.upid NOT IN (SELECT user_pseudo_id FROM purchase_info)
+          AND cityHash64(s_all.upid) % 100 < {nonconv_sample_pct}
         GROUP BY s_all.upid
     )
     SELECT path_sequence, converted, sum(revenue) AS revenue, count() AS occurrences
@@ -181,11 +216,23 @@ def get_raw_paths(
     database_id: int,
     start_date: str,
     end_date: str,
-    lookback: int = 30
+    lookback: int = 30,
+    no_limit: bool = False,
+    nonconv_sample_pct: int = 100,
 ) -> pd.DataFrame:
-    """Returns aggregated path sequences for Path Intelligence (Sprint 7)."""
-    sql = _raw_paths_sql(start_date, end_date, lookback)
-    return _run_query(database_id, sql)
+    """Returns aggregated path sequences for Path Intelligence (Sprint 7).
+
+    no_limit=True bypasses Metabase's default 2000-row cap (routes to
+    /api/dataset/json). Required for state-expansion models where rare
+    path patterns matter.
+
+    nonconv_sample_pct in [1, 100] downsamples non-converting users to keep
+    the GROUP BY tractable in ClickHouse. The legacy default 100 preserves
+    backward compatibility; pass NON_CONV_SAMPLE_PCT (typically 1-5) when
+    doing full extractions of large windows.
+    """
+    sql = _raw_paths_sql(start_date, end_date, lookback, nonconv_sample_pct)
+    return _run_query(database_id, sql, no_limit=no_limit)
 
 
 # ---------------------------------------------------------------------------
