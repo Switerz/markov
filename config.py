@@ -80,6 +80,7 @@ CENSORSHIP_DAYS = _env_int("CENSORSHIP_DAYS", 0)
 TRACKED_STATES = {
     # Paid Social
     "Paid Meta Ads",
+    "TikTok Ads",
     # Google (all CPC types unified: Search, Shopping, PMax, Demand Gen)
     "Google Ads",
     # Other paid
@@ -94,7 +95,6 @@ TRACKED_STATES = {
     "Organic Search",
     "Direct",
     # Misc
-    "Influencers",
     "Clube GoCase",
     "Referral",
     "Other",
@@ -103,6 +103,7 @@ TRACKED_STATES = {
 # States that represent paid spend (used for ROAS calculation)
 PAID_CHANNELS = {
     "Paid Meta Ads",
+    "TikTok Ads",
     "Google Ads",
     "Display / Retargeting",
 }

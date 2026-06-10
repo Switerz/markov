@@ -33,6 +33,8 @@ export type ChannelRow = {
   spend?: number | null;
   roas_markov?: number | null;
   roas_shapley?: number | null;
+  pfc_weight?: number | null;
+  pfc_delta_pp?: number | null;
   first_click_revenue?: number | null;
   first_click_roas?: number | null;
   last_click_revenue?: number | null;

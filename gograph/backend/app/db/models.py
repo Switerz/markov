@@ -114,6 +114,8 @@ class AttributionResult(Base):
     spend: Mapped[float | None] = mapped_column(Float, nullable=True)
     roas_markov: Mapped[float | None] = mapped_column(Float, nullable=True)
     roas_shapley: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pfc_weight: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pfc_delta_pp: Mapped[float | None] = mapped_column(Float, nullable=True)
     recommendation: Mapped[str | None] = mapped_column(String(255), nullable=True)
     confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 

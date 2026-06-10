@@ -338,6 +338,8 @@ def _save_attribution_results(
                 spend=_row_value(row, "spend"),
                 roas_markov=_row_value(row, "roas_markov"),
                 roas_shapley=_row_value(row, "roas_shapley"),
+                pfc_weight=_row_value(row, "pfc_weight"),
+                pfc_delta_pp=_row_value(row, "pfc_delta_pp"),
                 recommendation=_row_value(row, "recommendation"),
                 confidence_score=_row_value(row, "confidence_score"),
             )

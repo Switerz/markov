@@ -71,6 +71,7 @@ def _state_sql(alias: str) -> str:
     return (
         "multiIf(\n"
         f"        ({m} IN ('paid_social','paid')) AND ({s} IN ('facebook','fb','whatsapp','facebook-sitelink','instagram','ig')), 'Paid Meta Ads',\n"
+        f"        ({m} IN ('paid_social','paid')) AND {s} = 'tiktok',               'TikTok Ads',\n"
         f"        {m} = 'cpc' AND {s} = 'google',                                   'Google Ads',\n"
         f"        {m} IN ('display','retargeting') AND {s} IN ('criteo','rtbhouse'), 'Display / Retargeting',\n"
         f"        {m} IN ('newsletter_email','automatic_email','architect_email','email','automatic_webpush','web_push'), 'Email',\n"
@@ -78,7 +79,6 @@ def _state_sql(alias: str) -> str:
         f"        {m} IN ('newsletter_sms','automatic_sms') OR ({m} = 'paid_social' AND {s} IN ('sms','automatic_sms')), 'SMS',\n"
         f"        {m} IN ('organic_social','organic_live','organic_broadcast') AND {s} = 'instagram', 'Organic Social / Instagram',\n"
         f"        {m} = 'organic_social' AND {s} = 'facebook',                      'Organic Social / Facebook',\n"
-        f"        {m} = 'influencers',                                               'Influencers',\n"
         f"        {m} = 'clube_gocase',                                              'Clube GoCase',\n"
         f"        {m} IN ('network_affiliates','network_parcerias','referral'),      'Referral',\n"
         f"        {a} = 'Direct',          'Direct',\n"
@@ -807,17 +807,23 @@ def get_funnel_enriched_paths(
     return df
 
 
+EMAIL_MONTHLY_SPEND = 145_000.0
+TIKTOK_MONTHLY_SPEND = 30_000.0
+
+
 def get_channel_spend(
     db_datamart: int,
     start_date: str,
     end_date: str,
 ) -> pd.DataFrame:
     """
-    Returns spend per channel from Google Ads, Meta, SMS and WhatsApp CRM.
+    Returns spend per channel from Google Ads, Meta, SMS, WhatsApp CRM and Email.
     SMS and WhatsApp CRM are derived from Insider send counts × fixed unit costs
     (R$0.04/msg and R$0.40/msg respectively).
+    Email is a fixed monthly budget (EMAIL_MONTHLY_SPEND) prorated by window length.
     Columns: channel, spend
     """
+    from datetime import date as _date
     google = _run_query(
         db_datamart,
         GOOGLE_COST_SQL.format(start_date=start_date, end_date=end_date),
@@ -842,6 +848,10 @@ def get_channel_spend(
     )
     wpp["spend"] = wpp["spend"].astype(float)
 
-    spend = pd.concat([google, meta, sms, wpp], ignore_index=True)
+    days = (_date.fromisoformat(end_date) - _date.fromisoformat(start_date)).days + 1
+    email = pd.DataFrame([{"channel": "Email", "spend": EMAIL_MONTHLY_SPEND * days / 30.0}])
+    tiktok = pd.DataFrame([{"channel": "TikTok Ads", "spend": TIKTOK_MONTHLY_SPEND * days / 30.0}])
+
+    spend = pd.concat([google, meta, sms, wpp, email, tiktok], ignore_index=True)
     spend = spend.groupby("channel", as_index=False).agg(spend=("spend", "sum"))
     return spend

@@ -1,7 +1,10 @@
 """Single-call orchestration service for the GoGraph analytical engine."""
 
+import logging
 from time import perf_counter
 from typing import Optional, Set
+
+logger = logging.getLogger(__name__)
 
 import pandas as pd
 
@@ -24,6 +27,7 @@ from gograph.backend.app.services.roas_service import (
     compute_channel_diagnostics,
     compute_roas
 )
+from gograph.backend.app.services.pfc_service import compute_pfc_attribution
 
 
 def params_from_config() -> ModelRunParams:
@@ -145,11 +149,34 @@ def run_model(
     if raw_paths is None:
         try:
             raw_paths = extraction_service.extract_raw_paths(params)
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "extract_raw_paths falhou (lookback=%s, %s–%s): %s — paths ficarão vazios.",
+                params.lookback_days, params.start_date, params.end_date, exc,
+            )
             raw_paths = pd.DataFrame()
     # top_n=500 stores enough paths to make sandbox historical analysis reliable.
     # The raw_paths SQL aggregates by path_sequence so 500 rows is still light.
     top_paths = path_service.enrich_raw_paths(raw_paths, transition_matrix, top_n=500)
+
+    # PFC attribution — requires raw_paths; silently skipped when unavailable.
+    if not raw_paths.empty:
+        try:
+            markov_col = "attribution_weight" if "attribution_weight" in roas_results.columns else "markov_weight"
+            markov_w = dict(zip(roas_results["channel"], roas_results[markov_col]))
+            pfc_df = compute_pfc_attribution(raw_paths, markov_w, total_revenue)
+            roas_results = roas_results.merge(
+                pfc_df[["channel", "pfc_weight", "pfc_delta_pp"]],
+                on="channel",
+                how="left",
+            )
+        except Exception as exc:
+            logger.warning("compute_pfc_attribution falhou: %s — PFC ficará vazio.", exc)
+            roas_results["pfc_weight"] = None
+            roas_results["pfc_delta_pp"] = None
+    else:
+        roas_results["pfc_weight"] = None
+        roas_results["pfc_delta_pp"] = None
 
     transition_counts = attribution_service.build_transition_counts(
         converting_transitions,

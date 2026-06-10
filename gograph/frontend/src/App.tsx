@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Activity,
@@ -115,6 +115,8 @@ const COLUMN_LABELS: Record<string, string> = {
   markov_weight: "Markov",
   raw_markov_weight: "Raw Markov",
   shapley_weight: "Shapley",
+  pfc_weight: "PFC",
+  pfc_delta_pp: "Δ PFC vs Markov",
   spend: "Spend",
   roas_markov: "ROAS Markov",
   roas_shapley: "ROAS Shapley",
@@ -163,6 +165,11 @@ export function App() {
   async function loadRunDetails(id: number) {
     setLoading(true);
     setError(null);
+    setDiagLoaded(null);
+    setLoopDiagnostics([]);
+    setFunnelAttribution([]);
+    setFunnelValidation([]);
+    setSequentialEffects([]);
     try {
       const [
         overviewData,
@@ -273,7 +280,11 @@ export function App() {
   const roasChartData = useMemo(
     () =>
       channels
-        .filter((row) => (row.spend ?? 0) > 0)
+        .filter(
+          (row) =>
+            (row.spend ?? 0) > 0 &&
+            ((row.roas_markov ?? 0) > 0 || (row.roas_shapley ?? 0) > 0),
+        )
         .slice(0, 8)
         .map((row) => ({
           channel: compactLabel(row.channel),
@@ -323,7 +334,9 @@ export function App() {
           <div>
             <h1>Dashboard Geral</h1>
             <p>
-              Markov, Shapley, ROAS e qualidade de dados por execução persistida.
+              {overview?.funnel_model_active
+                ? "Funnel Stage Markov (ativo) · Shapley · ROAS · qualidade de dados por execução."
+                : "Markov, Shapley, ROAS e qualidade de dados por execução persistida."}
             </p>
           </div>
           <RunForm
@@ -421,7 +434,7 @@ export function App() {
         )}
         {!loading && overview && tab === "quality" && <Quality rows={quality} />}
         {!loading && overview && tab === "paths" && <Paths rows={paths} />}
-        {tab === "model-diagnostics" && selectedId !== null && (
+        {!loading && overview && tab === "model-diagnostics" && (
           <ModelDiagnostics
             loopDiagnostics={loopDiagnostics}
             funnelAttribution={funnelAttribution}
@@ -429,6 +442,7 @@ export function App() {
             sequentialEffects={sequentialEffects}
             channels={channels}
             rawChannels={rawChannels}
+            funnelActive={overview.funnel_model_active ?? false}
           />
         )}
         {tab === "sandbox" && selectedId !== null && (
@@ -481,6 +495,22 @@ function RunForm({
           value={payload.end_date}
           onChange={(event) =>
             setPayload({ ...payload, end_date: event.target.value })
+          }
+        />
+      </label>
+      <label>
+        Lookback (dias)
+        <input
+          type="number"
+          min={1}
+          max={90}
+          placeholder="default (env)"
+          value={payload.lookback_days ?? ""}
+          onChange={(event) =>
+            setPayload({
+              ...payload,
+              lookback_days: event.target.value === "" ? null : Number(event.target.value),
+            })
           }
         />
       </label>
@@ -650,6 +680,8 @@ function Channels({
           "markov_weight",
           ...(funnelActive ? ["raw_markov_weight"] : []),
           "shapley_weight",
+          "pfc_weight",
+          "pfc_delta_pp",
           "spend",
           "roas_markov",
           "roas_shapley",
@@ -692,8 +724,53 @@ function GraphView({ graph }: { graph: GraphResponse }) {
     });
     return ids;
   }, [visibleEdges]);
-  const visibleNodes = graph.nodes.filter((node) => visibleNodeIds.has(node.id));
-  const positions = layoutGraph(visibleNodes);
+  const visibleNodes = useMemo(
+    () => graph.nodes.filter((node) => visibleNodeIds.has(node.id)),
+    [graph.nodes, visibleNodeIds],
+  );
+
+  // Draggable positions — reset when visible set changes
+  const [positions, setPositions] = useState<Map<string, { x: number; y: number }>>(
+    () => layoutGraph(visibleNodes),
+  );
+  useEffect(() => {
+    setPositions(layoutGraph(visibleNodes));
+  }, [visibleNodes]);
+
+  const svgRef = useRef<SVGSVGElement>(null);
+  const dragRef = useRef<{ nodeId: string; offsetX: number; offsetY: number } | null>(null);
+
+  function toSVGCoords(e: React.MouseEvent): { x: number; y: number } | null {
+    const svg = svgRef.current;
+    if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    return {
+      x: ((e.clientX - rect.left) / rect.width) * 960,
+      y: ((e.clientY - rect.top) / rect.height) * 520,
+    };
+  }
+
+  function onNodeMouseDown(e: React.MouseEvent, nodeId: string) {
+    e.preventDefault();
+    const pos = positions.get(nodeId);
+    const pt = toSVGCoords(e);
+    if (!pos || !pt) return;
+    dragRef.current = { nodeId, offsetX: pt.x - pos.x, offsetY: pt.y - pos.y };
+  }
+
+  function onSVGMouseMove(e: React.MouseEvent<SVGSVGElement>) {
+    if (!dragRef.current) return;
+    const pt = toSVGCoords(e);
+    if (!pt) return;
+    const { nodeId, offsetX, offsetY } = dragRef.current;
+    const x = Math.max(24, Math.min(936, pt.x - offsetX));
+    const y = Math.max(20, Math.min(500, pt.y - offsetY));
+    setPositions((prev) => new Map(prev).set(nodeId, { x, y }));
+  }
+
+  function onSVGMouseUp() {
+    dragRef.current = null;
+  }
 
   return (
     <div className="panel-stack">
@@ -746,7 +823,16 @@ function GraphView({ graph }: { graph: GraphResponse }) {
           <p className="muted">Nenhum grafo disponível para esta execução.</p>
         ) : (
           <>
-            <svg className="journey-graph" viewBox="0 0 960 520" role="img">
+            <svg
+              ref={svgRef}
+              className="journey-graph"
+              viewBox="0 0 960 520"
+              role="img"
+              onMouseMove={onSVGMouseMove}
+              onMouseUp={onSVGMouseUp}
+              onMouseLeave={onSVGMouseUp}
+              style={{ cursor: dragRef.current ? "grabbing" : "default" }}
+            >
               <defs>
                 <marker
                   id="arrow"
@@ -790,6 +876,8 @@ function GraphView({ graph }: { graph: GraphResponse }) {
                       node.in_cycle ? "cycle" : ""
                     }`}
                     transform={`translate(${position.x} ${position.y})`}
+                    onMouseDown={(e) => onNodeMouseDown(e, node.id)}
+                    style={{ cursor: "grab" }}
                   >
                     <circle r={nodeRadius(node.pagerank)} />
                     <text y={4}>{compactLabel(node.label)}</text>
@@ -1137,7 +1225,7 @@ const PCT_COLUMNS = new Set([
   "first_touch_share", "middle_touch_share", "last_touch_share",
   "conv_first_touch_share", "conv_middle_touch_share", "conv_last_touch_share",
   "nonconv_first_touch_share", "nonconv_middle_touch_share", "nonconv_last_touch_share",
-  "markov_weight", "raw_markov_weight", "shapley_weight",
+  "markov_weight", "raw_markov_weight", "shapley_weight", "pfc_weight",
 ]);
 
 const LONG_TEXT_COLUMNS = new Set([
@@ -1161,7 +1249,7 @@ function renderDataCell(column: string, value: unknown): ReactNode {
     return <span className="cell-long-text">{String(value)}</span>;
   }
 
-  if (column === "markov_shapley_delta_pp") {
+  if (column === "markov_shapley_delta_pp" || column === "pfc_delta_pp") {
     const n = Number(value);
     if (!Number.isFinite(n)) return <span className="cell-null">—</span>;
     return (
@@ -1200,7 +1288,7 @@ function renderDataCell(column: string, value: unknown): ReactNode {
 
 function IntentBar({ row }: { row: FunnelValidationRow }) {
   const total = row.funnel_markov_weight;
-  if (total === 0) return <span className="cell-null">—</span>;
+  if (!total) return <span className="cell-null">—</span>;
   const segments = [
     { pct: row.low_intent_weight / total, color: "#e2e8f0", label: "Low Intent" },
     { pct: row.product_interest_weight / total, color: "#93c5fd", label: "Product Interest" },
@@ -1238,7 +1326,7 @@ function FunnelValidation({ rows }: { rows: FunnelValidationRow[] }) {
   const totalLI = rows.reduce((s, r) => s + r.low_intent_weight, 0);
   const overallDrag = totalFunnel > 0 ? totalLI / totalFunnel : 0;
   const topDrag = sorted[0];
-  const topQual = [...rows].sort((a, b) => b.qualified_intent_share - a.qualified_intent_share)[0];
+  const topQual = rows.reduce((best, r) => r.qualified_intent_share > best.qualified_intent_share ? r : best, rows[0]);
 
   return (
     <section className="chart-band">
@@ -1336,6 +1424,7 @@ function ModelDiagnostics({
   sequentialEffects,
   channels,
   rawChannels,
+  funnelActive,
 }: {
   loopDiagnostics: LoopDiagnosticRow[];
   funnelAttribution: FunnelAttributionRow[];
@@ -1343,6 +1432,7 @@ function ModelDiagnostics({
   sequentialEffects: SequentialEffectRow[];
   channels: ChannelRow[];
   rawChannels: ChannelRow[];
+  funnelActive: boolean;
 }) {
   const [seqFilter, setSeqFilter] = useState<string>("Paid Meta Ads");
   const metaChannel = "Paid Meta Ads";
@@ -1390,11 +1480,13 @@ function ModelDiagnostics({
 
       {/* ---- NOTA METODOLÓGICA ---- */}
       <div className="how-to-read">
-        <strong>Camadas diagnósticas — não são atribuição oficial</strong>
+        <strong>Camadas diagnósticas</strong>
         <ul>
-          <li><strong>Markov/Shapley Raw</strong> continua sendo o modelo oficial de atribuição.</li>
+          {funnelActive
+            ? <li><strong>Funnel Stage Markov</strong> é o modelo oficial de atribuição — estados compostos (canal / estágio de intenção). Raw Channel disponível na seção abaixo para comparação.</li>
+            : <li><strong>Markov/Shapley Raw</strong> é o modelo oficial de atribuição.</li>
+          }
           <li><strong>Loop Diagnostics</strong>: presença e impacto de auto-loops por canal.</li>
-          <li><strong>Funnel Stage</strong>: Markov com estados compostos (canal / estágio de intenção). Requer Events V2.</li>
           <li><strong>Efeitos Sequenciais</strong>: P(Conversão | anterior, atual) vs P(Conversão | atual). Diagnóstico de ordem 2.</li>
         </ul>
       </div>
@@ -1592,7 +1684,7 @@ function ModelDiagnostics({
         <section className="chart-band">
           <header>
             <h2>Comparação: Raw Channel vs Funnel Stage</h2>
-            <span>atribuição oficial vs diagnóstica</span>
+            <span>{funnelActive ? "Funnel Stage (oficial) vs Raw Channel (referência)" : "Raw Channel (oficial) vs Funnel Stage (diagnóstico)"}</span>
           </header>
           <div className="table-wrap">
             <table>
@@ -1720,25 +1812,61 @@ function DataTable<T extends Record<string, unknown>>({
   columns: string[];
   rows: T[];
 }) {
+  const [sortCol, setSortCol] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  function handleSort(col: string) {
+    if (sortCol === col) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortCol(col);
+      setSortDir("desc");
+    }
+  }
+
+  const sortedRows = useMemo(() => {
+    if (!sortCol) return rows;
+    return [...rows].sort((a, b) => {
+      const av = a[sortCol];
+      const bv = b[sortCol];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      const an = Number(av);
+      const bn = Number(bv);
+      const cmp = Number.isFinite(an) && Number.isFinite(bn)
+        ? an - bn
+        : String(av).localeCompare(String(bv));
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [rows, sortCol, sortDir]);
+
   return (
     <section className="table-wrap">
       <table>
         <thead>
           <tr>
             {columns.map((column) => (
-              <th key={column}>{COLUMN_LABELS[column] ?? column}</th>
+              <th
+                key={column}
+                onClick={() => handleSort(column)}
+                style={{ cursor: "pointer", userSelect: "none" }}
+              >
+                {COLUMN_LABELS[column] ?? column}
+                {sortCol === column ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+              </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 && (
+          {sortedRows.length === 0 && (
             <tr>
               <td colSpan={columns.length} style={{ color: "#94a3b8", fontStyle: "italic" }}>
                 Sem dados para esta tabela.
               </td>
             </tr>
           )}
-          {rows.map((row, index) => (
+          {sortedRows.map((row, index) => (
             <tr key={index}>
               {columns.map((column) => (
                 <td key={column}>
