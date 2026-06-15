@@ -1,13 +1,76 @@
+import { useState } from "react";
+import { Plus, Download } from "lucide-react";
 import { TopBar } from "../../app/TopBar";
+import { Button, Tabs } from "../../shared/ui";
+import { JourneyFilters } from "./components/JourneyFilters";
+import { JourneyViewTabs } from "./components/JourneyViewTabs";
+import { JourneySankeyPanel } from "./components/JourneySankeyPanel";
+import { JourneyGraphPanel } from "./components/JourneyGraphPanel";
+import { TopPathsTable } from "./components/TopPathsTable";
+import { TransitionMatrixHeatmap } from "./components/TransitionMatrixHeatmap";
+import { JourneyBuilder } from "./components/JourneyBuilder";
+import { LoopsPatternsList } from "./components/LoopsPatternsList";
+import { useJourneysData } from "./hooks/useJourneysData";
+import { useJourneyGraphMock } from "./hooks/useJourneyGraphMock";
+import styles from "./JourneysPage.module.css";
 
+// Layout decision (per spec criterion):
+// The bottom row of Top paths + Matrix + Loops is always visible. The tab
+// switcher controls the *upper* primary view (Flow vs Graph vs Paths vs
+// Matrix). Paths/Matrix tabs intentionally duplicate the bottom-row data
+// because the spec lists those as the v1 dedicated tabs AND the bottom
+// 3-card row criterion (acceptance: "três cards na parte inferior").
 export function JourneysPage() {
+  const data = useJourneysData();
+  const graph = useJourneyGraphMock(data);
+  const [tab, setTab] = useState<string>("flow");
+
   return (
     <>
-      <TopBar title="Jornadas" subtitle="Em construção." />
-      <div style={{ padding: "var(--gg-space-6)" }}>
-        <p style={{ color: "var(--gg-text-secondary)", fontSize: 14 }}>
-          Esta tela será construída em uma fase posterior do refactor.
-        </p>
+      <TopBar
+        title={data.screen.title}
+        subtitle={data.screen.subtitle}
+        actions={
+          <>
+            <Button variant="primary" iconLeft={<Plus size={16} />}>
+              Nova execução
+            </Button>
+            <Button variant="secondary" iconLeft={<Download size={16} />}>
+              Exportar
+            </Button>
+          </>
+        }
+        filters={<JourneyFilters filters={data.filters} />}
+      />
+      <div className={styles.page}>
+        <Tabs.Root value={tab} onValueChange={setTab}>
+          <JourneyViewTabs tabs={data.viewTabs} />
+          <Tabs.Content value="flow">
+            <div className={styles.flowGrid}>
+              <JourneySankeyPanel
+                flow={data.journeyFlow}
+                metric={data.flowMetric}
+                onSwitchToGraph={() => setTab("graph")}
+              />
+              <JourneyBuilder builder={data.journeyBuilder} />
+            </div>
+          </Tabs.Content>
+          <Tabs.Content value="graph">
+            <JourneyGraphPanel nodes={graph.nodes} edges={graph.edges} />
+          </Tabs.Content>
+          <Tabs.Content value="paths">
+            <TopPathsTable paths={data.topPaths} />
+          </Tabs.Content>
+          <Tabs.Content value="matrix">
+            <TransitionMatrixHeatmap matrix={data.transitionMatrix} />
+          </Tabs.Content>
+        </Tabs.Root>
+
+        <div className={styles.bottomGrid}>
+          <TopPathsTable paths={data.topPaths} />
+          <TransitionMatrixHeatmap matrix={data.transitionMatrix} />
+          <LoopsPatternsList loops={data.loopsAndPatterns} />
+        </div>
       </div>
     </>
   );
