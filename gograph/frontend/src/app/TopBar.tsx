@@ -7,7 +7,9 @@ import styles from "./TopBar.module.css";
 export type Crumb = { label: string; to?: string };
 
 export type TopBarProps = {
-  title?: string;
+  // `title` accepts a plain string OR a ReactNode so screens like Channel 360
+  // can render a logo + channel name + badge inside the heading slot.
+  title?: ReactNode;
   subtitle?: string;
   breadcrumb?: Crumb[];
   filters?: ReactNode;
@@ -32,7 +34,9 @@ export function TopBar({ title, subtitle, breadcrumb, filters, actions, classNam
               </ol>
             </nav>
           )}
-          {title && <h1 className={styles.title}>{title}</h1>}
+          {title !== undefined && title !== null && title !== "" && (
+            <h1 className={styles.title}>{title}</h1>
+          )}
           {subtitle && <p className={styles.subtitle}>{subtitle}</p>}
         </div>
         {actions && <div className={styles.actions}>{actions}</div>}
