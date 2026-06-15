@@ -1,0 +1,66 @@
+:root {
+  /* Surfaces */
+  --gg-bg: #FFFFFF;
+  --gg-surface: #FFFFFF;
+  --gg-surface-soft: #F7F9FE;
+  --gg-surface-muted: #EEF2FB;
+  --gg-border: #DDE4F2;
+  --gg-border-strong: #C2CCDF;
+
+  /* Text — secundário subido para passar WCAG AA em #F7F9FE */
+  --gg-text-primary: #07133F;
+  --gg-text-secondary: #3F4D6E;
+  --gg-text-tertiary: #5B6A89;
+
+  /* Accents */
+  --gg-blue: #245BFF;
+  --gg-blue-soft: #E8EEFF;
+  --gg-green: #16A34A;
+  --gg-green-soft: #DCFCE7;
+  --gg-red: #EF4444;
+  --gg-red-soft: #FEE2E2;
+  --gg-orange: #F59E0B;
+  --gg-orange-soft: #FEF3C7;
+  --gg-indigo: #5B4FE5;
+  --gg-indigo-soft: #E6E3FB;
+  --gg-cyan: #20C7B5;
+  --gg-cyan-soft: #D5F5EF;
+  --gg-neutral: #5B6A89;
+  --gg-neutral-soft: #EEF2FB;
+
+  /* Radius */
+  --gg-radius-card: 8px;
+  --gg-radius-control: 8px;
+  --gg-radius-pill: 999px;
+
+  /* Shadow */
+  --gg-shadow-soft: 0 10px 30px rgba(15, 23, 42, 0.06);
+  --gg-shadow-elev: 0 18px 40px rgba(15, 23, 42, 0.08);
+
+  /* Type */
+  --gg-font-display: "Geist", "Inter", system-ui, sans-serif;
+  --gg-font-body: "Inter", system-ui, sans-serif;
+  --gg-font-mono: "Geist Mono", ui-monospace, monospace;
+
+  /* Spacing scale (4pt base) */
+  --gg-space-1: 4px;
+  --gg-space-2: 8px;
+  --gg-space-3: 12px;
+  --gg-space-4: 16px;
+  --gg-space-5: 24px;
+  --gg-space-6: 32px;
+  --gg-space-7: 48px;
+  --gg-space-8: 64px;
+
+  /* Z-index scale */
+  --gg-z-dropdown: 10;
+  --gg-z-sticky: 20;
+  --gg-z-drawer: 40;
+  --gg-z-modal-backdrop: 50;
+  --gg-z-modal: 60;
+  --gg-z-toast: 70;
+  --gg-z-tooltip: 80;
+}
+
+html, body { font-family: var(--gg-font-body); color: var(--gg-text-primary); background: var(--gg-bg); }
+button, input, select, textarea { font-family: inherit; }
