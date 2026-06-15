@@ -1,0 +1,82 @@
+.root {
+  width: 100%;
+  overflow: auto;
+  font-family: var(--gg-font-body);
+  color: var(--gg-text-primary);
+  border: 1px solid var(--gg-border);
+  border-radius: var(--gg-radius-card);
+  background: var(--gg-surface);
+}
+
+.table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+
+.headRow th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--gg-surface);
+  font-size: 11px;
+  color: var(--gg-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  padding: 8px 12px;
+  text-align: right;
+  border-bottom: 1px solid var(--gg-border);
+  white-space: nowrap;
+}
+
+.headRow th.corner,
+.headRow th.firstCol {
+  text-align: left;
+}
+
+.firstCol {
+  position: sticky;
+  left: 0;
+  background: var(--gg-surface);
+  z-index: 1;
+  border-right: 1px solid var(--gg-border);
+  font-weight: 600;
+  font-size: 12px;
+  padding: 8px 12px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.headRow th.firstCol {
+  z-index: 3;
+}
+
+.cell {
+  padding: 8px 12px;
+  text-align: right;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.diag {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--gg-surface-soft),
+    var(--gg-surface-soft) 6px,
+    var(--gg-border) 6px,
+    var(--gg-border) 7px
+  );
+  color: transparent;
+}
+
+.metricLabel {
+  padding: 8px 12px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--gg-text-secondary);
+  border-bottom: 1px solid var(--gg-border);
+  background: var(--gg-surface);
+}
