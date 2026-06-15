@@ -1,0 +1,47 @@
+.groups {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--gg-space-5);
+}
+
+@media (min-width: 768px) {
+  .groups {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gg-space-3);
+}
+
+.groupTitle {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gg-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.callout {
+  margin-top: var(--gg-space-4);
+  padding: var(--gg-space-3) var(--gg-space-4);
+  border-radius: 12px;
+  background: var(--gg-green-soft);
+  color: var(--gg-green);
+}
+
+.calloutLabel {
+  font-weight: 600;
+  font-size: 14px;
+  margin: 0 0 4px 0;
+}
+
+.calloutDescription {
+  margin: 0;
+  color: var(--gg-text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+}
