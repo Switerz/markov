@@ -24,3 +24,4 @@ export { Drawer, type DrawerProps } from "./Drawer";
 export { ProgressBar, type ProgressBarProps } from "./ProgressBar";
 export { IconTile, type IconTileProps } from "./IconTile";
 export { ToastProvider, useToast } from "./Toast";
+export { Modal, type ModalProps } from "./Modal";

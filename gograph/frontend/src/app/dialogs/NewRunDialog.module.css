@@ -1,0 +1,53 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gg-space-3);
+}
+
+.row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gg-space-3);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.label {
+  font-weight: 500;
+  color: var(--gg-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hint {
+  color: var(--gg-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.input {
+  appearance: none;
+  background: var(--gg-surface);
+  border: 1px solid var(--gg-border);
+  border-radius: var(--gg-radius-control);
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--gg-text-primary);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--gg-blue);
+  outline-offset: 1px;
+  border-color: var(--gg-blue);
+}
+
+.error {
+  color: var(--gg-red);
+  font-size: 12px;
+}
