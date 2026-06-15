@@ -21,22 +21,59 @@ import {
   type ScenarioCompareResponse,
 } from "./api";
 
-const KNOWN_CHANNELS = [
-  "Paid Meta Ads",
-  "Google Ads",
-  "Display / Retargeting",
-  "Email",
-  "WhatsApp CRM",
-  "SMS",
-  "Organic Social / Instagram",
-  "Organic Social / Facebook",
-  "Organic Search",
-  "Direct",
-  "Influencers",
-  "Clube GoCase",
-  "Referral",
-  "Other",
-];
+const CHANNEL_CATEGORIES = [
+  {
+    label: "Mídia Paga",
+    border: "#2563eb",
+    bg: "#eff6ff",
+    chipClass: "channel-chip-paid",
+    channels: [
+      "Paid Meta Ads",
+      "TikTok Ads",
+      "Google Ads / Search",
+      "Google Ads / Search / Inst",
+      "Google Ads / Shopping",
+      "Google Ads / Shopping / Inst",
+      "Google Ads / PMax",
+      "Google Ads / Other",
+      "Display / Retargeting",
+    ],
+  },
+  {
+    label: "CRM / Owned",
+    border: "#7c3aed",
+    bg: "#f5f3ff",
+    chipClass: "channel-chip-crm",
+    channels: ["Email", "WhatsApp CRM", "SMS"],
+  },
+  {
+    label: "Orgânico",
+    border: "#059669",
+    bg: "#f0fdf4",
+    chipClass: "channel-chip-organic",
+    channels: [
+      "Organic Social / Instagram",
+      "Organic Social / Facebook",
+      "Organic Search",
+      "Direct",
+    ],
+  },
+  {
+    label: "Outros",
+    border: "#92400e",
+    bg: "#fffbeb",
+    chipClass: "channel-chip-other",
+    channels: ["Clube GoCase", "Referral", "Other"],
+  },
+] as const;
+
+const KNOWN_CHANNELS = CHANNEL_CATEGORIES.flatMap((cat) => cat.channels as readonly string[]);
+
+function channelCategory(label: string) {
+  return CHANNEL_CATEGORIES.find((cat) =>
+    (cat.channels as readonly string[]).includes(label)
+  );
+}
 
 const fmtMoney = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -129,6 +166,7 @@ export function SandboxView({ modelRunId }: { modelRunId: number }) {
     const id = `node_${Date.now()}`;
     const x = 120 + (nodes.length % 4) * 200;
     const y = 80 + Math.floor(nodes.length / 4) * 120;
+    const cat = channelCategory(label);
     setNodes((prev) => [
       ...prev,
       {
@@ -136,8 +174,8 @@ export function SandboxView({ modelRunId }: { modelRunId: number }) {
         position: { x, y },
         data: { label },
         style: {
-          background: "#fff",
-          border: "2px solid #2563eb",
+          background: cat ? cat.bg : "#fef9c3",
+          border: `2px solid ${cat ? cat.border : "#ca8a04"}`,
           borderRadius: "8px",
           padding: "8px 14px",
           fontSize: "13px",
@@ -236,17 +274,18 @@ export function SandboxView({ modelRunId }: { modelRunId: number }) {
       id: n.id as string,
       position: (n.position as { x: number; y: number }) ?? { x: 100, y: 100 },
       data: { label: n.label as string },
-      style: {
-        background: KNOWN_CHANNELS.includes(n.label as string) ? "#fff" : "#fef9c3",
-        border: KNOWN_CHANNELS.includes(n.label as string)
-          ? "2px solid #2563eb"
-          : "2px dashed #ca8a04",
-        borderRadius: "8px",
-        padding: "8px 14px",
-        fontSize: "13px",
-        fontWeight: 600,
-        cursor: "grab",
-      },
+      style: (() => {
+        const cat = channelCategory(n.label as string);
+        return {
+          background: cat ? cat.bg : "#fef9c3",
+          border: cat ? `2px solid ${cat.border}` : "2px dashed #ca8a04",
+          borderRadius: "8px",
+          padding: "8px 14px",
+          fontSize: "13px",
+          fontWeight: 600,
+          cursor: "grab",
+        };
+      })(),
     }));
     const rfEdges: Edge[] = s.edges.map((e: Record<string, unknown>) => ({
       id: e.id as string,
@@ -330,14 +369,29 @@ export function SandboxView({ modelRunId }: { modelRunId: number }) {
               <FlaskConical size={15} /> Canais
             </h3>
             <div className="channel-palette">
-              {KNOWN_CHANNELS.map((ch) => (
-                <button
-                  key={ch}
-                  className="channel-chip"
-                  onClick={() => addChannelNode(ch)}
-                >
-                  <Plus size={11} /> {ch}
-                </button>
+              {CHANNEL_CATEGORIES.map((cat) => (
+                <div key={cat.label} className="channel-category-group">
+                  <span
+                    className="channel-category-label"
+                    style={{ color: cat.border }}
+                  >
+                    {cat.label}
+                  </span>
+                  {(cat.channels as readonly string[]).map((ch) => (
+                    <button
+                      key={ch}
+                      className={`channel-chip ${cat.chipClass}`}
+                      onClick={() => addChannelNode(ch)}
+                      style={{
+                        borderColor: cat.border,
+                        background: cat.bg,
+                        color: cat.border,
+                      }}
+                    >
+                      <Plus size={10} /> {ch}
+                    </button>
+                  ))}
+                </div>
               ))}
             </div>
             <div className="custom-channel-row">

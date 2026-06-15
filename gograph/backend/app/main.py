@@ -11,7 +11,7 @@ from gograph.backend.app.db import create_db_and_tables
 
 def create_app(database_url: str | None = None) -> FastAPI:
     app = FastAPI(
-        title="GoGraph API",
+        title="GoLift API",
         version="0.1.0",
         description="Analytical API for Markov/Shapley journey attribution.",
     )
@@ -35,7 +35,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
     @app.get("/")
     def root():
         return {
-            "name": "GoGraph API",
+            "name": "GoLift API",
             "status": "ok",
             "health": "/health",
             "model_runs": "/model-runs",

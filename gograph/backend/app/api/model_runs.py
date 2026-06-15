@@ -368,6 +368,15 @@ def get_funnel_validation(
 # Sprint 14 — Sequential Effects
 # ---------------------------------------------------------------------------
 
+@router.get("/{model_run_id}/session-quality", response_model=TableResponse)
+def get_session_quality(
+    model_run_id: int,
+    session: Session = Depends(get_db_session),
+):
+    """Per-channel session engagement metrics: duration, pageviews, bounce rate, events."""
+    return _table_response(model_run_id, "session_quality", session)
+
+
 @router.get("/{model_run_id}/sequential-effects", response_model=TableResponse)
 def get_sequential_effects(
     model_run_id: int,

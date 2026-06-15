@@ -159,25 +159,6 @@ def run_model(
     # The raw_paths SQL aggregates by path_sequence so 500 rows is still light.
     top_paths = path_service.enrich_raw_paths(raw_paths, transition_matrix, top_n=500)
 
-    # PFC attribution — requires raw_paths; silently skipped when unavailable.
-    if not raw_paths.empty:
-        try:
-            markov_col = "attribution_weight" if "attribution_weight" in roas_results.columns else "markov_weight"
-            markov_w = dict(zip(roas_results["channel"], roas_results[markov_col]))
-            pfc_df = compute_pfc_attribution(raw_paths, markov_w, total_revenue)
-            roas_results = roas_results.merge(
-                pfc_df[["channel", "pfc_weight", "pfc_delta_pp"]],
-                on="channel",
-                how="left",
-            )
-        except Exception as exc:
-            logger.warning("compute_pfc_attribution falhou: %s — PFC ficará vazio.", exc)
-            roas_results["pfc_weight"] = None
-            roas_results["pfc_delta_pp"] = None
-    else:
-        roas_results["pfc_weight"] = None
-        roas_results["pfc_delta_pp"] = None
-
     transition_counts = attribution_service.build_transition_counts(
         converting_transitions,
         nonconverting_transitions,
@@ -247,8 +228,41 @@ def run_model(
                 paid_channels=paid_channels or config.PAID_CHANNELS,
             )
             funnel_model_active = True
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Funnel model falhou: %s", exc, exc_info=True)
+
+    # -----------------------------------------------------------------
+    # Sprint 18 — Session Quality (independent of model, graceful fallback)
+    # -----------------------------------------------------------------
+    session_quality_df: pd.DataFrame = pd.DataFrame()
+    try:
+        from extract import get_session_quality
+        session_quality_df = get_session_quality(
+            database_id=params.db_plausible,
+            start_date=params.start_date,
+            end_date=params.end_date,
+        )
+    except Exception as exc:
+        logger.warning("get_session_quality falhou: %s — session quality ficará vazio.", exc)
+
+    # PFC attribution — runs on final roas_results (after funnel model may have replaced it).
+    if not raw_paths.empty:
+        try:
+            markov_col = "attribution_weight" if "attribution_weight" in roas_results.columns else "markov_weight"
+            markov_w = dict(zip(roas_results["channel"], roas_results[markov_col]))
+            pfc_df = compute_pfc_attribution(raw_paths, markov_w, total_revenue)
+            roas_results = roas_results.merge(
+                pfc_df[["channel", "pfc_weight", "pfc_delta_pp"]],
+                on="channel",
+                how="left",
+            )
+        except Exception as exc:
+            logger.warning("compute_pfc_attribution falhou: %s — PFC ficará vazio.", exc)
+            roas_results["pfc_weight"] = None
+            roas_results["pfc_delta_pp"] = None
+    else:
+        roas_results["pfc_weight"] = None
+        roas_results["pfc_delta_pp"] = None
 
     runtime_seconds = perf_counter() - started
 
@@ -276,4 +290,5 @@ def run_model(
         raw_markov_results=raw_markov_results if not raw_markov_results.empty else None,
         raw_shapley_results=raw_shapley_results if not raw_shapley_results.empty else None,
         funnel_model_active=funnel_model_active,
+        session_quality=session_quality_df if not session_quality_df.empty else None,
     )

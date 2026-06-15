@@ -4,18 +4,21 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
-  Database,
   FlaskConical,
   GitGraph,
   Lightbulb,
   Play,
+  PlayCircle,
   RefreshCw,
   TableProperties,
+  TrendingUp,
+  Zap,
 } from "lucide-react";
 import {
   Bar,
   BarChart,
   CartesianGrid,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -35,11 +38,15 @@ import {
   ModelRunCreatePayload,
   PathRow,
   SequentialEffectRow,
+  SessionQualityRow,
   TouchpointRow,
 } from "./api";
 import { SandboxView } from "./SandboxView";
+import { ConversionView } from "./ConversionView";
+import { SessionQualityView } from "./SessionQualityView";
 
 type Tab =
+  | "runs"
   | "overview"
   | "channels"
   | "graph"
@@ -49,6 +56,8 @@ type Tab =
   | "quality"
   | "paths"
   | "model-diagnostics"
+  | "conversao"
+  | "sessoes"
   | "sandbox";
 
 const defaultPayload: ModelRunCreatePayload = {
@@ -118,6 +127,7 @@ const COLUMN_LABELS: Record<string, string> = {
   pfc_weight: "PFC",
   pfc_delta_pp: "Δ PFC vs Markov",
   spend: "Spend",
+  invest_pct: "Invest. %",
   roas_markov: "ROAS Markov",
   roas_shapley: "ROAS Shapley",
   roas_first_click: "ROAS 1º Click",
@@ -140,6 +150,7 @@ export function App() {
   const [funnelAttribution, setFunnelAttribution] = useState<FunnelAttributionRow[]>([]);
   const [funnelValidation, setFunnelValidation] = useState<FunnelValidationRow[]>([]);
   const [sequentialEffects, setSequentialEffects] = useState<SequentialEffectRow[]>([]);
+  const [sessionQuality, setSessionQuality] = useState<SessionQualityRow[]>([]);
   const [diagLoaded, setDiagLoaded] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
   const [payload, setPayload] = useState<ModelRunCreatePayload>(defaultPayload);
@@ -170,6 +181,7 @@ export function App() {
     setFunnelAttribution([]);
     setFunnelValidation([]);
     setSequentialEffects([]);
+    setSessionQuality([]);
     try {
       const [
         overviewData,
@@ -181,6 +193,7 @@ export function App() {
         graphData,
         qualityData,
         pathsData,
+        sessionQualityData,
       ] =
         await Promise.all([
           api.getOverview(id),
@@ -192,6 +205,7 @@ export function App() {
           api.getGraph(id),
           api.getDataQuality(id),
           api.getPaths(id),
+          api.getSessionQuality(id),
         ]);
       setOverview(overviewData);
       setChannels(channelData.rows);
@@ -202,6 +216,7 @@ export function App() {
       setGraph(graphData);
       setQuality(qualityData.rows);
       setPaths(pathsData.rows);
+      setSessionQuality(sessionQualityData.rows);
     } catch (err) {
       setError(readError(err));
     } finally {
@@ -296,122 +311,121 @@ export function App() {
 
   return (
     <main className="app-shell">
-      <aside className="sidebar">
+      {/* ── Nav rail ── */}
+      <nav className="nav-rail">
         <div className="brand">
-          <Database size={22} />
+          <TrendingUp size={20} />
           <div>
-            <strong>GoGraph</strong>
-            <span>Analytics MVP</span>
+            <strong>GoLift</strong>
+            <span>Attribution</span>
           </div>
         </div>
 
-        <button className="icon-button full" onClick={() => void loadRuns()}>
-          <RefreshCw size={16} />
-          Atualizar
-        </button>
+        <div className="nav-tabs">
+          <NavTab active={tab === "runs"} onClick={() => setTab("runs")} icon={<PlayCircle size={15} />}>
+            Execuções
+          </NavTab>
 
-        <section className="run-list">
-          <h2>Execuções</h2>
-          {runs.length === 0 && <p className="muted">Nenhum model run salvo.</p>}
-          {runs.map((run) => (
-            <button
-              key={run.id}
-              className={`run-item ${selectedId === run.id ? "active" : ""}`}
-              onClick={() => setSelectedId(run.id)}
-            >
-              <strong>#{run.id}</strong>
-              <span>
-                {run.start_date} · {run.end_date}
+          <span className="nav-section-label">Resultados</span>
+          <NavTab active={tab === "overview"} onClick={() => setTab("overview")} icon={<Activity size={15} />}>
+            Overview
+          </NavTab>
+          <NavTab active={tab === "channels"} onClick={() => setTab("channels")} icon={<BarChart3 size={15} />}>
+            Canais
+          </NavTab>
+          <NavTab active={tab === "graph"} onClick={() => setTab("graph")} icon={<GitGraph size={15} />}>
+            Grafo
+          </NavTab>
+          <NavTab active={tab === "insights"} onClick={() => setTab("insights")} icon={<Lightbulb size={15} />}>
+            Insights
+          </NavTab>
+
+          <span className="nav-section-label">Análise</span>
+          <NavTab active={tab === "touchpoints"} onClick={() => setTab("touchpoints")} icon={<TableProperties size={15} />}>
+            Pontos de Toque
+          </NavTab>
+          <NavTab active={tab === "diagnostics"} onClick={() => setTab("diagnostics")} icon={<TableProperties size={15} />}>
+            Papel do Canal
+          </NavTab>
+          <NavTab active={tab === "quality"} onClick={() => setTab("quality")} icon={<AlertTriangle size={15} />}>
+            Qualidade
+          </NavTab>
+          <NavTab active={tab === "paths"} onClick={() => setTab("paths")} icon={<GitGraph size={15} />}>
+            Caminhos
+          </NavTab>
+
+          <span className="nav-section-label">Avançado</span>
+          <NavTab active={tab === "model-diagnostics"} onClick={() => setTab("model-diagnostics")} icon={<Activity size={15} />}>
+            Diagnósticos
+          </NavTab>
+          <NavTab active={tab === "conversao"} onClick={() => setTab("conversao")} icon={<TrendingUp size={15} />}>
+            Oportunidades
+          </NavTab>
+          <NavTab active={tab === "sessoes"} onClick={() => setTab("sessoes")} icon={<Zap size={15} />}>
+            Sessões
+          </NavTab>
+          <NavTab active={tab === "sandbox"} onClick={() => setTab("sandbox")} icon={<FlaskConical size={15} />}>
+            Sandbox
+          </NavTab>
+        </div>
+      </nav>
+
+      {/* ── Main content ── */}
+      <div className="main-content">
+        {/* Run info bar */}
+        {tab !== "runs" && (
+          <div className="run-bar">
+            {selectedId !== null ? (
+              <>
+                <span className="run-bar-id">Run #{selectedId}</span>
+                {overview && (
+                  <>
+                    <span className="run-bar-sep">·</span>
+                    <span className="run-bar-dates">{overview.start_date} → {overview.end_date}</span>
+                    <span className="run-bar-sep">·</span>
+                    <RunStatusChip status={overview.status} />
+                    {overview.funnel_model_active && (
+                      <span className="run-bar-badge">Funnel Stage</span>
+                    )}
+                  </>
+                )}
+                {loading && <span className="run-bar-loading">atualizando…</span>}
+              </>
+            ) : (
+              <span className="run-bar-empty">
+                Nenhuma execução selecionada — vá para <button className="run-bar-link" onClick={() => setTab("runs")}>Execuções</button>
               </span>
-              <em>{run.status}</em>
-            </button>
-          ))}
-        </section>
-      </aside>
-
-      <section className="workspace">
-        <header className="topbar">
-          <div>
-            <h1>Dashboard Geral</h1>
-            <p>
-              {overview?.funnel_model_active
-                ? "Funnel Stage Markov (ativo) · Shapley · ROAS · qualidade de dados por execução."
-                : "Markov, Shapley, ROAS e qualidade de dados por execução persistida."}
-            </p>
+            )}
           </div>
-          <RunForm
-            payload={payload}
-            setPayload={setPayload}
-            creating={creating}
-            onSubmit={() => void createRun()}
-          />
-        </header>
+        )}
 
         {error && (
-          <div className="alert">
+          <div className="alert" style={{ marginBottom: 16 }}>
             <AlertTriangle size={16} />
             <span>{error}</span>
           </div>
         )}
 
-        <nav className="tabs">
-          <TabButton active={tab === "overview"} onClick={() => setTab("overview")}>
-            <Activity size={16} />
-            Overview
-          </TabButton>
-          <TabButton active={tab === "channels"} onClick={() => setTab("channels")}>
-            <BarChart3 size={16} />
-            Canais
-          </TabButton>
-          <TabButton active={tab === "graph"} onClick={() => setTab("graph")}>
-            <GitGraph size={16} />
-            Grafo
-          </TabButton>
-          <TabButton active={tab === "insights"} onClick={() => setTab("insights")}>
-            <Lightbulb size={16} />
-            Insights
-          </TabButton>
-          <TabButton
-            active={tab === "touchpoints"}
-            onClick={() => setTab("touchpoints")}
-          >
-            <TableProperties size={16} />
-            Pontos
-          </TabButton>
-          <TabButton
-            active={tab === "diagnostics"}
-            onClick={() => setTab("diagnostics")}
-          >
-            <TableProperties size={16} />
-            Papel do Canal
-          </TabButton>
-          <TabButton active={tab === "quality"} onClick={() => setTab("quality")}>
-            <AlertTriangle size={16} />
-            Qualidade
-          </TabButton>
-          <TabButton active={tab === "paths"} onClick={() => setTab("paths")}>
-            <GitGraph size={16} />
-            Caminhos
-          </TabButton>
-          <TabButton
-            active={tab === "model-diagnostics"}
-            onClick={() => setTab("model-diagnostics")}
-          >
-            <Activity size={16} />
-            Diagnósticos
-          </TabButton>
+        {tab === "runs" && (
+          <RunsView
+            runs={runs}
+            selectedId={selectedId}
+            onSelect={(id) => { setSelectedId(id); setTab("overview"); }}
+            payload={payload}
+            setPayload={setPayload}
+            creating={creating}
+            onCreateRun={() => void createRun()}
+            onRefresh={() => void loadRuns()}
+            loading={loading}
+          />
+        )}
 
-          <TabButton active={tab === "sandbox"} onClick={() => setTab("sandbox")}>
-            <FlaskConical size={16} />
-            Sandbox
-          </TabButton>
-        </nav>
+        {loading && tab !== "runs" && <p className="muted" style={{ padding: "20px 0" }}>Carregando…</p>}
 
-        {loading && <p className="muted">Carregando...</p>}
-        {!loading && !overview && (
+        {!loading && !overview && tab !== "runs" && (
           <div className="empty-state">
             <h2>Sem execução selecionada</h2>
-            <p>Crie uma execução ou selecione um model run salvo.</p>
+            <p>Vá para <strong>Execuções</strong> para criar ou selecionar um model run.</p>
           </div>
         )}
         {!loading && overview && tab === "overview" && (
@@ -434,6 +448,12 @@ export function App() {
         )}
         {!loading && overview && tab === "quality" && <Quality rows={quality} />}
         {!loading && overview && tab === "paths" && <Paths rows={paths} />}
+        {!loading && overview && tab === "conversao" && (
+          <ConversionView run={overview} paths={paths} channels={channels} />
+        )}
+        {!loading && overview && tab === "sessoes" && (
+          <SessionQualityView sessionQuality={sessionQuality} channels={channels} />
+        )}
         {!loading && overview && tab === "model-diagnostics" && (
           <ModelDiagnostics
             loopDiagnostics={loopDiagnostics}
@@ -454,7 +474,7 @@ export function App() {
             <p>O Sandbox usa a matriz de transição de um model run existente.</p>
           </div>
         )}
-      </section>
+      </div>
     </main>
   );
 }
@@ -550,6 +570,113 @@ function RunForm({
   );
 }
 
+function NavTab({
+  active,
+  onClick,
+  icon,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <button className={`nav-tab${active ? " active" : ""}`} onClick={onClick}>
+      {icon}
+      <span>{children}</span>
+    </button>
+  );
+}
+
+function RunStatusChip({ status }: { status: string }) {
+  const v = status.toLowerCase();
+  if (v === "complete" || v === "completed")
+    return <span className="run-status run-status-complete">Completo</span>;
+  if (v === "running")
+    return <span className="run-status run-status-running">Rodando</span>;
+  if (v === "pending")
+    return <span className="run-status run-status-pending">Pendente</span>;
+  if (v === "failed")
+    return <span className="run-status run-status-failed">Falhou</span>;
+  return <span className="run-status">{status}</span>;
+}
+
+function RunsView({
+  runs,
+  selectedId,
+  onSelect,
+  payload,
+  setPayload,
+  creating,
+  onCreateRun,
+  onRefresh,
+  loading,
+}: {
+  runs: ModelRun[];
+  selectedId: number | null;
+  onSelect: (id: number) => void;
+  payload: ModelRunCreatePayload;
+  setPayload: (p: ModelRunCreatePayload) => void;
+  creating: boolean;
+  onCreateRun: () => void;
+  onRefresh: () => void;
+  loading: boolean;
+}) {
+  return (
+    <div className="runs-view">
+      <div className="runs-view-header">
+        <h1>Execuções</h1>
+        <p className="muted">Configure e execute o modelo de atribuição, ou selecione uma execução anterior para ver os resultados.</p>
+      </div>
+
+      <div className="runs-layout">
+        <section className="runs-new-card">
+          <h2>Nova execução</h2>
+          <RunForm
+            payload={payload}
+            setPayload={setPayload}
+            creating={creating}
+            onSubmit={onCreateRun}
+          />
+        </section>
+
+        <section className="runs-list-card">
+          <div className="runs-list-header">
+            <h2>Execuções salvas</h2>
+            <button className="icon-button" onClick={onRefresh} disabled={loading}>
+              <RefreshCw size={14} />
+              Atualizar
+            </button>
+          </div>
+          {loading && <p className="muted">Carregando…</p>}
+          {!loading && runs.length === 0 && (
+            <p className="muted">Nenhum model run salvo ainda.</p>
+          )}
+          <div className="run-cards-grid">
+            {runs.map((run) => (
+              <button
+                key={run.id}
+                className={`run-card${selectedId === run.id ? " active" : ""}`}
+                onClick={() => onSelect(run.id)}
+              >
+                <div className="run-card-top">
+                  <strong>#{run.id}</strong>
+                  <RunStatusChip status={run.status} />
+                </div>
+                <div className="run-card-dates">{run.start_date} → {run.end_date}</div>
+                {(run.total_revenue ?? 0) > 0 && (
+                  <div className="run-card-revenue">{fmtMoney.format(run.total_revenue)}</div>
+                )}
+              </button>
+            ))}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
 function Overview({
   run,
   channels,
@@ -634,7 +761,6 @@ function Overview({
 function Channels({
   rows,
   chartRows,
-  rawRows,
   funnelActive,
 }: {
   rows: ChannelRow[];
@@ -642,35 +768,51 @@ function Channels({
   rawRows: ChannelRow[];
   funnelActive: boolean;
 }) {
+  const totalSpend = rows.reduce((s, r) => s + (r.spend ?? 0), 0);
+
   const chartData = chartRows.map((row) => ({
     channel: compactLabel(row.channel),
-    markov: (row.markov_weight ?? 0) * 100,
-    shapley: (row.shapley_weight ?? 0) * 100,
+    markov: +((row.markov_weight ?? 0) * 100).toFixed(1),
+    shapley: +((row.shapley_weight ?? 0) * 100).toFixed(1),
+    pfc: +((row.pfc_weight ?? 0) * 100).toFixed(1),
+    invest: totalSpend > 0 ? +((row.spend ?? 0) / totalSpend * 100).toFixed(1) : 0,
   }));
 
-  // Build comparison map: channel → raw markov weight
-  const rawMap = new Map(rawRows.map((r) => [r.channel, r]));
+  const tableRows = rows.map((r) => ({
+    ...r,
+    invest_pct: totalSpend > 0 ? (r.spend ?? 0) / totalSpend : null,
+    roas_markov: r.roas_markov != null ? `${fmtNumber.format(r.roas_markov)}×` : null,
+    roas_shapley: r.roas_shapley != null ? `${fmtNumber.format(r.roas_shapley)}×` : null,
+    roas_first_click: r.first_click_roas != null ? `${fmtNumber.format(r.first_click_roas)}×` : null,
+    roas_last_click: r.last_click_roas != null ? `${fmtNumber.format(r.last_click_roas)}×` : null,
+  }));
 
   return (
     <div className="panel-stack">
       {funnelActive && (
         <div className="how-to-read">
-          <strong>Modelo ativo: Funnel Stage Markov</strong> — os pesos abaixo são atribuição por canal agregada a partir de estados compostos (canal / estágio de intenção). A coluna <em>Raw Markov</em> mostra o modelo de canal puro para comparação.
+          <strong>Modelo ativo: Funnel Stage Markov</strong> — pesos por canal agregados a partir de estados compostos (canal / estágio de intenção). <em>Invest. %</em> = fatia do budget pago alocada a cada canal — compare com a atribuição para identificar canais sub/sobre-creditados.
         </div>
       )}
       <section className="chart-band">
         <header>
-          <h2>Pesos de atribuição{funnelActive ? " — Funnel Stage" : ""}</h2>
-          <span>Top canais por Markov</span>
+          <h2>Atribuição de receita vs investimento{funnelActive ? " — Funnel Stage" : ""}</h2>
+          <span>Top {chartRows.length} canais por Markov</span>
         </header>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="channel" />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey="markov" fill="#2563eb" name="Markov %" />
-            <Bar dataKey="shapley" fill="#16a34a" name="Shapley %" />
+        <ResponsiveContainer width="100%" height={320}>
+          <BarChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+            <XAxis dataKey="channel" tick={{ fontSize: 11 }} />
+            <YAxis tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11 }} width={38} />
+            <Tooltip
+              formatter={(value, name) => [`${Number(value).toFixed(1)}%`, name as string]}
+              contentStyle={{ fontSize: 12, borderRadius: 8 }}
+            />
+            <Legend wrapperStyle={{ fontSize: 12 }} />
+            <Bar dataKey="markov"  fill="#2563eb" name="Markov %"  radius={[3, 3, 0, 0]} maxBarSize={18} />
+            <Bar dataKey="shapley" fill="#16a34a" name="Shapley %" radius={[3, 3, 0, 0]} maxBarSize={18} />
+            <Bar dataKey="pfc"     fill="#ea580c" name="PFC %"     radius={[3, 3, 0, 0]} maxBarSize={18} />
+            <Bar dataKey="invest"  fill="#94a3b8" name="Invest. %" radius={[3, 3, 0, 0]} maxBarSize={18} />
           </BarChart>
         </ResponsiveContainer>
       </section>
@@ -678,25 +820,16 @@ function Channels({
         columns={[
           "channel",
           "markov_weight",
-          ...(funnelActive ? ["raw_markov_weight"] : []),
           "shapley_weight",
           "pfc_weight",
-          "pfc_delta_pp",
+          "invest_pct",
           "spend",
           "roas_markov",
           "roas_shapley",
           "roas_first_click",
           "roas_last_click",
-          "recommendation",
         ]}
-        rows={rows.map((r) => ({
-          ...r,
-          roas_markov: r.roas_markov != null ? `${fmtNumber.format(r.roas_markov)}×` : null,
-          roas_shapley: r.roas_shapley != null ? `${fmtNumber.format(r.roas_shapley)}×` : null,
-          roas_first_click: r.first_click_roas != null ? `${fmtNumber.format(r.first_click_roas)}×` : null,
-          roas_last_click: r.last_click_roas != null ? `${fmtNumber.format(r.last_click_roas)}×` : null,
-          raw_markov_weight: rawMap.get(r.channel)?.markov_weight ?? null,
-        }))}
+        rows={tableRows}
       />
     </div>
   );
@@ -993,22 +1126,59 @@ function GraphView({ graph }: { graph: GraphResponse }) {
 }
 
 function Diagnostics({ rows }: { rows: DiagnosticRow[] }) {
+  if (rows.length === 0) {
+    return <p className="muted">Sem dados de diagnóstico para esta execução.</p>;
+  }
+  const sorted = [...rows].sort(
+    (a, b) => (b.presence_converting ?? 0) - (a.presence_converting ?? 0),
+  );
   return (
-    <DataTable
-      columns={[
-        "channel",
-        "channel_role",
-        "presence_converting",
-        "presence_nonconverting",
-        "first_touch_share",
-        "middle_touch_share",
-        "last_touch_share",
-        "markov_shapley_delta_pp",
-        "diagnostic_label",
-        "diagnostic_text",
-      ]}
-      rows={rows}
-    />
+    <div className="panel-stack">
+      <section className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Canal</th>
+              <th>Papel</th>
+              <th style={{ textAlign: "center" }}>Posição geral</th>
+              <th style={{ textAlign: "right" }}>Pres. conv.</th>
+              <th style={{ textAlign: "right" }}>Pres. n-conv.</th>
+              <th style={{ textAlign: "right" }}>Δ Markov–Shapley</th>
+              <th>Diagnóstico</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((row, i) => {
+              const delta = row.markov_shapley_delta_pp ?? 0;
+              return (
+                <tr key={i}>
+                  <td><strong>{row.channel}</strong></td>
+                  <td><RoleBadge value={row.channel_role ?? ""} /></td>
+                  <td style={{ minWidth: 130 }}>
+                    <TouchPositionBar
+                      first={row.first_touch_share ?? 0}
+                      middle={row.middle_touch_share ?? 0}
+                      last={row.last_touch_share ?? 0}
+                      colors={POS_COLORS_GENERAL}
+                    />
+                  </td>
+                  <td style={{ textAlign: "right" }}>{row.presence_converting != null ? fmtPct.format(row.presence_converting) : "—"}</td>
+                  <td style={{ textAlign: "right" }}>{row.presence_nonconverting != null ? fmtPct.format(row.presence_nonconverting) : "—"}</td>
+                  <td style={{ textAlign: "right" }}>
+                    <span className={Math.abs(delta) > 0.05 ? (delta > 0 ? "cell-positive" : "cell-negative") : ""}>
+                      {delta > 0 ? "+" : ""}{(delta * 100).toFixed(1)} pp
+                    </span>
+                  </td>
+                  <td style={{ fontSize: 12, color: "#475569", maxWidth: 260, whiteSpace: "normal" }}>
+                    {row.diagnostic_text ?? "—"}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </section>
+    </div>
   );
 }
 
@@ -1066,25 +1236,113 @@ function Insights({ rows }: { rows: InsightRow[] }) {
   );
 }
 
-function Touchpoints({ rows }: { rows: TouchpointRow[] }) {
+// Distinct color sets for position bars — [1st, middle, last]
+const POS_COLORS_CONV:    [string, string, string] = ["#0ea5e9", "#f59e0b", "#7c3aed"];
+const POS_COLORS_NONCONV: [string, string, string] = ["#7dd3fc", "#fcd34d", "#c4b5fd"];
+const POS_COLORS_GENERAL: [string, string, string] = ["#0ea5e9", "#f59e0b", "#7c3aed"];
+
+function TouchPositionBar({
+  first, middle, last, colors,
+}: {
+  first: number; middle: number; last: number;
+  colors: [string, string, string];
+}) {
+  const total = first + middle + last;
+  if (total === 0) return <span className="cell-null">—</span>;
+  const p1 = Math.round((first  / total) * 100);
+  const pm = Math.round((middle / total) * 100);
+  const pl = 100 - p1 - pm;
+  const dot = (c: string) => (
+    <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: c, flexShrink: 0 }} />
+  );
   return (
-    <DataTable
-      columns={[
-        "channel",
-        "touchpoint_role",
-        "conv_first_touch_share",
-        "conv_middle_touch_share",
-        "conv_last_touch_share",
-        "nonconv_first_touch_share",
-        "nonconv_middle_touch_share",
-        "nonconv_last_touch_share",
-        "starter_count",
-        "assist_count",
-        "closer_count",
-        "dropoff_after_touch",
-      ]}
-      rows={rows}
-    />
+    <div style={{ width: "100%", minWidth: 100, display: "flex", flexDirection: "column", gap: 3 }}>
+      <div style={{ display: "flex", width: "100%", height: 8, borderRadius: 4, overflow: "hidden" }}>
+        {p1 > 0 && <div style={{ width: `${p1}%`, height: "100%", background: colors[0] }} />}
+        {pm > 0 && <div style={{ width: `${pm}%`, height: "100%", background: colors[1] }} />}
+        {pl > 0 && <div style={{ width: `${pl}%`, height: "100%", background: colors[2] }} />}
+      </div>
+      <div style={{ display: "flex", gap: 6, fontSize: 10, lineHeight: 1, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+        {p1 > 0 && <span style={{ display: "flex", alignItems: "center", gap: 2, color: colors[0] }}>{dot(colors[0])}{p1}%</span>}
+        {pm > 0 && <span style={{ display: "flex", alignItems: "center", gap: 2, color: colors[1] }}>{dot(colors[1])}{pm}%</span>}
+        {pl > 0 && <span style={{ display: "flex", alignItems: "center", gap: 2, color: colors[2] }}>{dot(colors[2])}{pl}%</span>}
+      </div>
+    </div>
+  );
+}
+
+function Touchpoints({ rows }: { rows: TouchpointRow[] }) {
+  if (rows.length === 0) {
+    return <p className="muted">Sem dados de touchpoints para esta execução.</p>;
+  }
+
+  const sorted = [...rows].sort(
+    (a, b) =>
+      ((b.starter_count ?? 0) + (b.assist_count ?? 0) + (b.closer_count ?? 0)) -
+      ((a.starter_count ?? 0) + (a.assist_count ?? 0) + (a.closer_count ?? 0)),
+  );
+
+  return (
+    <div className="panel-stack">
+      <div className="how-to-read">
+        <strong>Como ler:</strong> cada barra mostra a distribuição de posição na jornada —{" "}
+        <span style={{ color: POS_COLORS_CONV[0], fontWeight: 600 }}>● 1º toque</span>{" · "}
+        <span style={{ color: POS_COLORS_CONV[1], fontWeight: 600 }}>● meio</span>{" · "}
+        <span style={{ color: POS_COLORS_CONV[2], fontWeight: 600 }}>● último</span>
+        {" "}em jornadas que <strong>converteram</strong> (cores saturadas) e que não converteram (cores claras). <strong>Abandono após toque</strong> = % de saídas não-conversoras entre todos os usuários que passaram por esse canal.
+      </div>
+      <section className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Canal</th>
+              <th>Papel</th>
+              <th style={{ textAlign: "center" }}>Posição — Convertidos</th>
+              <th style={{ textAlign: "center" }}>Posição — Não conv.</th>
+              <th style={{ textAlign: "right" }}>Iniciadores</th>
+              <th style={{ textAlign: "right" }}>Assistências</th>
+              <th style={{ textAlign: "right" }}>Finalizadores</th>
+              <th style={{ textAlign: "right" }}>Abandono após</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((row, i) => {
+              const dropoff = row.dropoff_after_touch ?? 0;
+              return (
+                <tr key={i}>
+                  <td><strong>{row.channel}</strong></td>
+                  <td><RoleBadge value={row.touchpoint_role ?? ""} /></td>
+                  <td style={{ minWidth: 130 }}>
+                    <TouchPositionBar
+                      first={row.conv_first_touch_share ?? 0}
+                      middle={row.conv_middle_touch_share ?? 0}
+                      last={row.conv_last_touch_share ?? 0}
+                      colors={POS_COLORS_CONV}
+                    />
+                  </td>
+                  <td style={{ minWidth: 130 }}>
+                    <TouchPositionBar
+                      first={row.nonconv_first_touch_share ?? 0}
+                      middle={row.nonconv_middle_touch_share ?? 0}
+                      last={row.nonconv_last_touch_share ?? 0}
+                      colors={POS_COLORS_NONCONV}
+                    />
+                  </td>
+                  <td style={{ textAlign: "right" }}>{fmtNumber.format(Math.round(row.starter_count ?? 0))}</td>
+                  <td style={{ textAlign: "right" }}>{fmtNumber.format(Math.round(row.assist_count ?? 0))}</td>
+                  <td style={{ textAlign: "right" }}>{fmtNumber.format(Math.round(row.closer_count ?? 0))}</td>
+                  <td style={{ textAlign: "right" }}>
+                    <span className={dropoff > 0.3 ? "cell-negative" : dropoff > 0.15 ? "cell-warn" : ""}>
+                      {fmtPct.format(dropoff)}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </section>
+    </div>
   );
 }
 
@@ -1226,6 +1484,7 @@ const PCT_COLUMNS = new Set([
   "conv_first_touch_share", "conv_middle_touch_share", "conv_last_touch_share",
   "nonconv_first_touch_share", "nonconv_middle_touch_share", "nonconv_last_touch_share",
   "markov_weight", "raw_markov_weight", "shapley_weight", "pfc_weight",
+  "invest_pct", "dropoff_after_touch",
 ]);
 
 const LONG_TEXT_COLUMNS = new Set([
@@ -1233,7 +1492,7 @@ const LONG_TEXT_COLUMNS = new Set([
 ]);
 
 const INT_COLUMNS = new Set([
-  "starter_count", "assist_count", "closer_count", "dropoff_after_touch",
+  "starter_count", "assist_count", "closer_count",
 ]);
 
 function renderDataCell(column: string, value: unknown): ReactNode {
@@ -1890,21 +2149,6 @@ function Kpi({ label, value }: { label: string; value: string }) {
   );
 }
 
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button className={`tab ${active ? "active" : ""}`} onClick={onClick}>
-      {children}
-    </button>
-  );
-}
 
 function maxBy<T>(rows: T[], getValue: (row: T) => number): T | undefined {
   return rows.reduce<T | undefined>((best, row) => {

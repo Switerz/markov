@@ -74,15 +74,20 @@ MODEL_BATCH_DAYS = _env_int("MODEL_BATCH_DAYS", 35)
 # Recommended values to test: 7, 14, 30.
 CENSORSHIP_DAYS = _env_int("CENSORSHIP_DAYS", 0)
 
-# Markov states — classified in SQL via utm_medium + utm_source only.
-# utm_campaign is intentionally ignored: naming conventions are inconsistent
-# and all Google CPC types share the same medium/source pair.
+# Markov states — classified in SQL via utm_medium + utm_source + utm_campaign.
+# Google Ads is split by campaign type using utm_campaign prefix patterns
+# (mirrors channel_type in raw.gogroup_google_ads on DB 63).
 TRACKED_STATES = {
     # Paid Social
     "Paid Meta Ads",
     "TikTok Ads",
-    # Google (all CPC types unified: Search, Shopping, PMax, Demand Gen)
-    "Google Ads",
+    # Google — Search e Shopping abertos por institucional / não-institucional
+    "Google Ads / Search",
+    "Google Ads / Search / Inst",
+    "Google Ads / Shopping",
+    "Google Ads / Shopping / Inst",
+    "Google Ads / PMax",
+    "Google Ads / Other",
     # Other paid
     "Display / Retargeting",
     # CRM / owned
@@ -104,6 +109,11 @@ TRACKED_STATES = {
 PAID_CHANNELS = {
     "Paid Meta Ads",
     "TikTok Ads",
-    "Google Ads",
+    "Google Ads / Search",
+    "Google Ads / Search / Inst",
+    "Google Ads / Shopping",
+    "Google Ads / Shopping / Inst",
+    "Google Ads / PMax",
+    "Google Ads / Other",
     "Display / Retargeting",
 }

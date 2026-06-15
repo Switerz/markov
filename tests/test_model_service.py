@@ -10,12 +10,12 @@ def _sample_inputs():
         [
             {
                 "from_ch": "(start)",
-                "to_ch": "Google Ads",
+                "to_ch": "Google Ads / Search",
                 "n": 10,
                 "total_revenue": 1000.0,
             },
             {
-                "from_ch": "Google Ads",
+                "from_ch": "Google Ads / Search",
                 "to_ch": "Email",
                 "n": 6,
                 "total_revenue": 600.0,
@@ -27,7 +27,7 @@ def _sample_inputs():
                 "total_revenue": 600.0,
             },
             {
-                "from_ch": "Google Ads",
+                "from_ch": "Google Ads / Search",
                 "to_ch": "Conversion",
                 "n": 4,
                 "total_revenue": 400.0,
@@ -36,15 +36,15 @@ def _sample_inputs():
     )
     nonconverting = pd.DataFrame(
         [
-            {"from_ch": "(start)", "to_ch": "Google Ads", "n": 5},
-            {"from_ch": "Google Ads", "to_ch": "Non-Conversion", "n": 5},
+            {"from_ch": "(start)", "to_ch": "Google Ads / Search", "n": 5},
+            {"from_ch": "Google Ads / Search", "to_ch": "Non-Conversion", "n": 5},
             {"from_ch": "(start)", "to_ch": "Direct", "n": 5},
             {"from_ch": "Direct", "to_ch": "Non-Conversion", "n": 5},
         ]
     )
     spend = pd.DataFrame(
         [
-            {"channel": "Google Ads", "spend": 200.0},
+            {"channel": "Google Ads / Search", "spend": 200.0},
             {"channel": "Email", "spend": 0.0},
         ]
     )
@@ -69,7 +69,7 @@ def test_run_model_accepts_injected_dataframes_without_metabase():
         spend=spend,
         total_revenue=1000.0,
         observed_conversion_rate=0.5,
-        paid_channels={"Google Ads"},
+        paid_channels={"Google Ads / Search"},
     )
 
     assert isinstance(result, ModelRunResult)
@@ -77,7 +77,7 @@ def test_run_model_accepts_injected_dataframes_without_metabase():
     assert result.non_conv_scale == 1.0
     assert result.total_revenue == 1000.0
     assert result.transition_matrix.loc["Conversion", "Conversion"] == 1.0
-    assert {"Google Ads", "Email"}.issubset(set(result.roas_results["channel"]))
+    assert {"Google Ads / Search", "Email"}.issubset(set(result.roas_results["channel"]))
     assert "model_conversion_rate" in result.summary()
 
 

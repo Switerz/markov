@@ -303,3 +303,37 @@ class SequentialEffect(Base):
 Index("ix_loop_diagnostics_run_channel", LoopDiagnostic.model_run_id, LoopDiagnostic.channel)
 Index("ix_funnel_state_run_channel", FunnelStateAttribution.model_run_id, FunnelStateAttribution.channel)
 Index("ix_sequential_effects_run_pair", SequentialEffect.model_run_id, SequentialEffect.previous_channel, SequentialEffect.current_channel)
+
+
+# ---------------------------------------------------------------------------
+# Sprint 18 — Session Quality
+# ---------------------------------------------------------------------------
+
+class SessionQuality(Base):
+    """Per-channel session engagement metrics (duration, pageviews, bounce, events)."""
+    __tablename__ = "session_quality"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    model_run_id: Mapped[int] = mapped_column(ForeignKey("model_runs.id"), index=True)
+    channel: Mapped[str] = mapped_column(String(255), index=True)
+    sessions: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    avg_duration_s: Mapped[float | None] = mapped_column(Float, nullable=True)
+    avg_pageviews: Mapped[float | None] = mapped_column(Float, nullable=True)
+    avg_bounce_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    avg_events: Mapped[float | None] = mapped_column(Float, nullable=True)
+    conv_sessions: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    conv_avg_duration_s: Mapped[float | None] = mapped_column(Float, nullable=True)
+    conv_avg_bounce_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    nonconv_avg_duration_s: Mapped[float | None] = mapped_column(Float, nullable=True)
+    nonconv_avg_bounce_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    model_run: Mapped["ModelRun"] = relationship(back_populates="session_quality")
+
+
+ModelRun.session_quality = relationship(
+    "SessionQuality",
+    back_populates="model_run",
+    cascade="all, delete-orphan",
+)
+
+Index("ix_session_quality_run_channel", SessionQuality.model_run_id, SessionQuality.channel)

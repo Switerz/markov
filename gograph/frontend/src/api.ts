@@ -234,6 +234,24 @@ export type SequentialEffectRow = {
 };
 
 // ---------------------------------------------------------------------------
+// Sprint 18 — Session Quality
+// ---------------------------------------------------------------------------
+
+export type SessionQualityRow = {
+  channel: string;
+  sessions?: number | null;
+  avg_duration_s?: number | null;
+  avg_pageviews?: number | null;
+  avg_bounce_rate?: number | null;
+  avg_events?: number | null;
+  conv_sessions?: number | null;
+  conv_avg_duration_s?: number | null;
+  conv_avg_bounce_rate?: number | null;
+  nonconv_avg_duration_s?: number | null;
+  nonconv_avg_bounce_rate?: number | null;
+};
+
+// ---------------------------------------------------------------------------
 // Sandbox types
 // ---------------------------------------------------------------------------
 
@@ -386,6 +404,8 @@ export const api = {
     request<TableResponse<SequentialEffectRow>>(
       `/model-runs/${id}/sequential-effects${prevChannel ? `?previous_channel=${encodeURIComponent(prevChannel)}` : ""}`
     ),
+  getSessionQuality: (id: number) =>
+    request<TableResponse<SessionQualityRow>>(`/model-runs/${id}/session-quality`),
   createRun: (payload: ModelRunCreatePayload) =>
     request<ModelRun>("/model-runs", {
       method: "POST",
