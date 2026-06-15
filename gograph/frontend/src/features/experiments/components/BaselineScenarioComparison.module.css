@@ -1,0 +1,126 @@
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gg-space-3);
+  width: 100%;
+}
+
+.legend {
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: var(--gg-space-4);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--gg-text-secondary);
+}
+
+.legendDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--gg-neutral);
+}
+
+.legendDot[data-tone="blue"] {
+  background: var(--gg-blue);
+}
+
+.legendDot[data-tone="green"] {
+  background: var(--gg-green);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--gg-space-4);
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--gg-border);
+  border-radius: var(--gg-radius-control);
+  background: var(--gg-surface);
+  overflow: hidden;
+}
+
+.colHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--gg-border);
+}
+
+.colHeader[data-tone="baseline"] {
+  background: color-mix(in srgb, var(--gg-blue) 10%, var(--gg-surface));
+}
+
+.colHeader[data-tone="scenario"] {
+  background: color-mix(in srgb, var(--gg-green) 10%, var(--gg-surface));
+}
+
+.colHeader[data-tone="delta"] {
+  background: var(--gg-surface-soft);
+}
+
+.colTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gg-text-primary);
+}
+
+.colPeriod {
+  font-size: 11px;
+  color: var(--gg-text-secondary);
+}
+
+.colBody {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gg-space-3);
+  padding: 10px 14px;
+  border-bottom: 1px dashed var(--gg-border);
+  min-height: 44px;
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.rowLabel {
+  font-size: 12px;
+  color: var(--gg-text-secondary);
+}
+
+.rowValue {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gg-text-primary);
+}
