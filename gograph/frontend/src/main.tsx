@@ -1,10 +1,15 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { App } from "./App";
+import { RouterProvider } from "react-router-dom";
+import { Providers } from "./app/Providers";
+import { router } from "./app/routes";
+import "./shared/tokens/tokens.css";
 import "./styles.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <Providers>
+      <RouterProvider router={router} />
+    </Providers>
   </React.StrictMode>,
 );
