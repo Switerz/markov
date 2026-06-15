@@ -418,3 +418,33 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 };
+
+// ---------------------------------------------------------------------------
+// React Query — convention
+// ---------------------------------------------------------------------------
+//
+// Feature-scoped query hooks live under features/<f>/hooks/use<X>.ts and use
+// these keys (all are arrays so they invalidate predictably):
+//
+//   ["runs"]                          → api.listRuns()
+//   ["overview", runId]               → api.getOverview(runId)
+//   ["channels", runId]               → api.getChannels(runId)
+//   ["channels:raw", runId]           → api.getRawChannels(runId)
+//   ["diagnostics", runId]            → api.getDiagnostics(runId)
+//   ["insights", runId]               → api.getInsights(runId)
+//   ["touchpoints", runId]            → api.getTouchpoints(runId)
+//   ["graph", runId]                  → api.getGraph(runId)
+//   ["paths", runId]                  → api.getPaths(runId)
+//   ["loops", runId]                  → api.getLoops(runId)
+//   ["loop-diagnostics", runId]       → api.getLoopDiagnostics(runId)
+//   ["funnel-attribution", runId]     → api.getFunnelAttribution(runId)
+//   ["funnel-validation", runId]      → api.getFunnelValidation(runId)
+//   ["sequential-effects", runId, prevChannel|null]
+//                                     → api.getSequentialEffects(runId, prevChannel)
+//   ["data-quality", runId]           → api.getDataQuality(runId)
+//   ["scenarios", runId]              → api.listScenarios(runId)
+//   ["scenario", scenarioId]          → api.getScenario(scenarioId)
+//   ["scenario:analysis", scenarioId] → api.analyzeScenario(scenarioId)
+//
+// All run-scoped queries should set `enabled: runId != null` and pass the
+// runId via the queryFn closure (never null inside queryFn).
