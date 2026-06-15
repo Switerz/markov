@@ -1,0 +1,141 @@
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gg-space-5);
+}
+
+.overall {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gg-space-2);
+}
+
+.overallTitle {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--gg-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0;
+}
+
+.overallRow {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--gg-space-3);
+  flex-wrap: wrap;
+}
+
+.overallValue {
+  font-family: var(--gg-font-display);
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--gg-text-primary);
+  line-height: 1;
+}
+
+.overallDelta {
+  font-size: 12px;
+  color: var(--gg-text-secondary);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gg-space-3);
+}
+
+.sectionTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gg-text-primary);
+  margin: 0;
+}
+
+.bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gg-space-2);
+}
+
+.callout {
+  border-radius: var(--gg-radius-card);
+  padding: var(--gg-space-3) var(--gg-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gg-space-2);
+}
+
+.calloutAlerts {
+  background: var(--gg-red-soft);
+  border: 1px solid var(--gg-red-soft);
+}
+
+.calloutAlertsTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gg-red);
+  margin: 0;
+}
+
+.calloutList {
+  margin: 0;
+  padding-left: var(--gg-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.calloutItem {
+  font-size: 12px;
+  color: var(--gg-text-primary);
+  line-height: 1.4;
+}
+
+.calloutChecks {
+  background: var(--gg-green-soft);
+  border: 1px solid var(--gg-green-soft);
+}
+
+.calloutChecksHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gg-space-3);
+}
+
+.calloutChecksTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gg-green);
+  margin: 0;
+}
+
+.calloutChecksValue {
+  font-family: var(--gg-font-display);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--gg-green);
+}
+
+.calloutDescription {
+  font-size: 12px;
+  color: var(--gg-text-primary);
+  margin: 0;
+}
+
+.action {
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gg-blue);
+  background: transparent;
+  border: 0;
+  padding: 0;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.action:hover {
+  text-decoration: underline;
+}
