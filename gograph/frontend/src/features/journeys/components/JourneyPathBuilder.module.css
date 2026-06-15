@@ -1,0 +1,64 @@
+.root { display: flex; flex-direction: column; }
+.palette {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding-bottom: var(--gg-space-3);
+  border-bottom: 1px solid var(--gg-border);
+  margin-bottom: var(--gg-space-3);
+}
+.paletteChip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: var(--gg-text-xs);
+  padding: 4px 8px;
+  background: var(--gg-surface-soft);
+  border: 1px solid var(--gg-border);
+  color: var(--gg-text-primary);
+  border-radius: var(--gg-radius-pill);
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms;
+}
+.paletteChip:hover { background: var(--gg-blue-soft); border-color: var(--gg-blue); }
+.customRow {
+  display: flex; gap: var(--gg-space-2);
+  margin-bottom: var(--gg-space-3);
+}
+.customInput {
+  flex: 1;
+  font-size: var(--gg-text-sm);
+  padding: 6px 10px;
+  border: 1px solid var(--gg-border);
+  border-radius: var(--gg-radius-control);
+  font-family: var(--gg-font-body);
+  color: var(--gg-text-primary);
+  background: var(--gg-surface);
+}
+.customInput:focus { outline: 2px solid var(--gg-blue); outline-offset: 2px; border-color: var(--gg-blue); }
+.canvas {
+  height: 360px;
+  border: 1px solid var(--gg-border);
+  border-radius: var(--gg-radius-card);
+  overflow: hidden;
+  background: var(--gg-surface-soft);
+  margin-bottom: var(--gg-space-3);
+}
+.simNote {
+  margin: 0 0 var(--gg-space-2);
+  font-size: var(--gg-text-xs);
+  color: var(--gg-text-secondary);
+}
+.simGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--gg-space-2);
+  margin-bottom: var(--gg-space-3);
+}
+.simTile {
+  display: flex; flex-direction: column;
+  padding: var(--gg-space-2) var(--gg-space-3);
+  background: var(--gg-surface-soft);
+  border: 1px solid var(--gg-border);
+  border-radius: var(--gg-radius-card);
+}
+.simLabel { font-size: var(--gg-text-xs); color: var(--gg-text-secondary); }
+.simValue { font-family: var(--gg-font-display); font-size: var(--gg-text-xl); font-weight: 600; color: var(--gg-text-primary); }
+.simSubtitle { font-size: var(--gg-text-xs); color: var(--gg-text-secondary); }
+.actions { display: flex; gap: var(--gg-space-2); justify-content: flex-end; }

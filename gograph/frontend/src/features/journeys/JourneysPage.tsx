@@ -8,7 +8,7 @@ import { JourneySankeyPanel } from "./components/JourneySankeyPanel";
 import { JourneyGraphPanel } from "./components/JourneyGraphPanel";
 import { TopPathsTable } from "./components/TopPathsTable";
 import { TransitionMatrixHeatmap } from "./components/TransitionMatrixHeatmap";
-import { JourneyBuilder } from "./components/JourneyBuilder";
+import { JourneyPathBuilder } from "./components/JourneyPathBuilder";
 import { LoopsPatternsList } from "./components/LoopsPatternsList";
 import { useJourneysData } from "./hooks/useJourneysData";
 import { useJourneyGraphMock } from "./hooks/useJourneyGraphMock";
@@ -52,7 +52,7 @@ export function JourneysPage() {
                 metric={data.flowMetric}
                 onSwitchToGraph={() => setTab("graph")}
               />
-              <JourneyBuilder builder={data.journeyBuilder} />
+              <JourneyPathBuilder builder={data.journeyBuilder} />
             </div>
           </Tabs.Content>
           <Tabs.Content value="graph">
