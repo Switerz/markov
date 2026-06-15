@@ -1,0 +1,41 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gg-space-3);
+  padding: var(--gg-space-3);
+  border: 1px solid var(--gg-border);
+  border-radius: 8px;
+  background: var(--gg-surface-soft);
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gg-text-primary);
+  margin: 0;
+}
+
+.description {
+  font-size: 12px;
+  color: var(--gg-text-secondary);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.impact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.impactLabel {
+  font-size: 12px;
+  color: var(--gg-text-secondary);
+}
