@@ -7,6 +7,7 @@ import {
   Button,
   Card,
   DataTable,
+  Drawer,
   cn,
 } from "../../../shared/ui";
 import type { Tone } from "../../../shared/tokens/tokens";
@@ -48,6 +49,7 @@ export function ExecutionHistoryTable({
   const filterControl = history.controls.find((c) => c.id === "filter");
   const searchPlaceholder = searchControl?.placeholder ?? "Buscar...";
   const [searchValue, setSearchValue] = useState("");
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
 
   const columns = useMemo<ColumnDef<ExecutionHistoryRow, unknown>[]>(
     () => [
@@ -190,7 +192,11 @@ export function ExecutionHistoryTable({
               aria-label={searchPlaceholder}
             />
           </label>
-          <Button variant="ghost" iconLeft={<ListFilter size={14} />}>
+          <Button
+            variant="ghost"
+            iconLeft={<ListFilter size={14} />}
+            onClick={() => setFilterDrawerOpen(true)}
+          >
             {filterControl?.label ?? "Filtrar"}
           </Button>
         </div>
@@ -230,6 +236,16 @@ export function ExecutionHistoryTable({
           })}
         </nav>
       </div>
+      <Drawer
+        open={filterDrawerOpen}
+        onOpenChange={setFilterDrawerOpen}
+        title="Filtros avançados"
+      >
+        <p style={{ color: "var(--gg-text-secondary)", fontSize: 13 }}>
+          Em construção. Filtros por status, período e responsável serão
+          habilitados em breve.
+        </p>
+      </Drawer>
     </Card>
   );
 }

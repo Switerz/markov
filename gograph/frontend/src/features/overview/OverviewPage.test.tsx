@@ -1,16 +1,16 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { TooltipProvider } from "../../shared/ui";
+import { Providers } from "../../app/Providers";
 import { OverviewPage } from "./OverviewPage";
 
 const renderPage = () =>
   render(
-    <MemoryRouter>
-      <TooltipProvider>
+    <Providers>
+      <MemoryRouter>
         <OverviewPage />
-      </TooltipProvider>
-    </MemoryRouter>,
+      </MemoryRouter>
+    </Providers>,
   );
 
 describe("OverviewPage", () => {

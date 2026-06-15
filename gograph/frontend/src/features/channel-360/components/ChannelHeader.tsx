@@ -1,6 +1,12 @@
-import { Calendar } from "lucide-react";
+import { useState } from "react";
 import { TopBar, type Crumb } from "../../../app/TopBar";
-import { Badge, Button, Select } from "../../../shared/ui";
+import {
+  Badge,
+  Button,
+  DateRangePicker,
+  Select,
+  type DateRange,
+} from "../../../shared/ui";
 import { channelIcon, channelInitial } from "../../../shared/icons/channelIcons";
 import { lucideIcon } from "../icons";
 import type {
@@ -32,17 +38,11 @@ function breadcrumbCrumbs(labels: string[]): Crumb[] {
 }
 
 function DateRangeChip({ label, value }: { label?: string; value: string }) {
+  const [range, setRange] = useState<DateRange>({ from: null, to: null });
   return (
     <div className={styles.group}>
       {label && <span className={styles.compareLabel}>{label}</span>}
-      <button
-        type="button"
-        className={styles.dateChip}
-        aria-label={label ? `${label} ${value}` : `Período ${value}`}
-      >
-        <Calendar size={14} aria-hidden className={styles.dateIcon} />
-        <span>{value}</span>
-      </button>
+      <DateRangePicker value={range} onChange={setRange} label={value} />
     </div>
   );
 }
@@ -56,9 +56,13 @@ function SelectChip({
   icon?: string;
   ariaLabel: string;
 }) {
+  // TODO(api): replace single-option list with real choices once the
+  // channel-scoped filter API exists.
+  const [v, setV] = useState(value);
   return (
     <Select
-      value={value}
+      value={v}
+      onValueChange={setV}
       icon={icon ? lucideIcon(icon, 14) : undefined}
       ariaLabel={ariaLabel}
     >

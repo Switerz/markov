@@ -1,5 +1,9 @@
-import { Calendar } from "lucide-react";
-import { Select } from "../../../shared/ui";
+import { useState } from "react";
+import {
+  DateRangePicker,
+  Select,
+  type DateRange,
+} from "../../../shared/ui";
 import { lucideIcon } from "../icons";
 import type { BudgetDecisionsFilter } from "../types";
 import styles from "./BudgetDecisionFilters.module.css";
@@ -17,25 +21,26 @@ function SelectChip({
   icon: string;
   ariaLabel: string;
 }) {
+  // TODO(api): swap single-option list for query-driven choices.
+  const [v, setV] = useState(value);
   return (
-    <Select value={value} icon={lucideIcon(icon, 14)} ariaLabel={ariaLabel}>
+    <Select
+      value={v}
+      onValueChange={setV}
+      icon={lucideIcon(icon, 14)}
+      ariaLabel={ariaLabel}
+    >
       <Select.Item value={value}>{value}</Select.Item>
     </Select>
   );
 }
 
 function DateRangeChip({ label, value }: { label?: string; value: string }) {
+  const [range, setRange] = useState<DateRange>({ from: null, to: null });
   return (
     <div className={styles.group}>
       {label && <span className={styles.compareLabel}>{label}</span>}
-      <button
-        type="button"
-        className={styles.dateChip}
-        aria-label={label ? `${label} ${value}` : `Período ${value}`}
-      >
-        <Calendar size={14} aria-hidden className={styles.dateIcon} />
-        <span>{value}</span>
-      </button>
+      <DateRangePicker value={range} onChange={setRange} label={value} />
     </div>
   );
 }

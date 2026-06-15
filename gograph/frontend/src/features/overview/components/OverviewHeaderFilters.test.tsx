@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { OverviewHeaderFilters } from "./OverviewHeaderFilters";
 import type { FilterItem } from "../types";
 
@@ -33,9 +34,27 @@ const filters: FilterItem[] = [
   },
 ];
 
+const values = {
+  account: "GoCase",
+  period: { from: null, to: null },
+  compareWith: { from: null, to: null },
+  executionId: null,
+};
+
 describe("OverviewHeaderFilters", () => {
   it("renders one chip per filter with its value visible", () => {
-    render(<OverviewHeaderFilters filters={filters} />);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <OverviewHeaderFilters
+          filters={filters}
+          values={values}
+          onChange={() => {}}
+        />
+      </QueryClientProvider>,
+    );
     expect(screen.getByText("GoCase")).toBeInTheDocument();
     expect(screen.getByText("01 Mai — 31 Mai 2026")).toBeInTheDocument();
     expect(screen.getByText("Comparar com:")).toBeInTheDocument();
