@@ -1,20 +1,13 @@
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--gg-space-3);
-  margin-bottom: var(--gg-space-4);
-}
-
-.headerLeft {
+.titleSlot {
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
 .channelIcon {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 999px;
   background: var(--gg-surface-soft);
   border: 1px solid var(--gg-border);
@@ -24,13 +17,19 @@
   color: var(--gg-text-secondary);
   font-weight: 600;
   font-size: 12px;
+  flex-shrink: 0;
 }
 
 .channelName {
-  font-size: 16px;
-  font-weight: 700;
+  font-family: var(--gg-font-display);
+  font-size: var(--gg-text-md);
+  font-weight: 600;
   color: var(--gg-text-primary);
-  margin: 0;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tabsRoot {

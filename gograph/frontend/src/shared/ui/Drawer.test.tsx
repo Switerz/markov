@@ -26,6 +26,28 @@ describe("Drawer", () => {
     expect(screen.getByText(/conteúdo do drawer/i)).toBeInTheDocument();
   });
 
+  it("accepts a ReactNode title (icon + text + badge composition)", () => {
+    const [open, setOpen] = [true, () => {}];
+    render(
+      <Drawer
+        open={open}
+        onOpenChange={setOpen}
+        title={
+          <span>
+            <span data-testid="title-icon">icn</span>
+            Google Ads
+            <span data-testid="title-badge">Escalar</span>
+          </span>
+        }
+      >
+        <p>body</p>
+      </Drawer>,
+    );
+    expect(screen.getByTestId("title-icon")).toBeInTheDocument();
+    expect(screen.getByText(/google ads/i)).toBeInTheDocument();
+    expect(screen.getByTestId("title-badge")).toBeInTheDocument();
+  });
+
   it("close button has aria-label", () => {
     render(<Harness />);
     expect(screen.getByLabelText(/fechar drawer/i)).toBeInTheDocument();

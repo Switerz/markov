@@ -7,7 +7,12 @@ import styles from "./Drawer.module.css";
 export type DrawerProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  title?: string;
+  /**
+   * Heading for the drawer. Accepts a plain string OR a ReactNode so callers
+   * can compose richer headers (icon + name + badge) without losing the
+   * Radix `<Dialog.Title>` accessibility wiring.
+   */
+  title?: ReactNode;
   width?: number;
   children?: ReactNode;
   className?: string;

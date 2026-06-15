@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Download, Plus } from "lucide-react";
 import { TopBar } from "../../app/TopBar";
 import { Button } from "../../shared/ui";
@@ -13,15 +13,14 @@ import styles from "./BudgetDecisionsPage.module.css";
 
 export function BudgetDecisionsPage() {
   const data = useBudgetDecisionsData();
+  // Drawer stays closed on initial load — users open it explicitly by
+  // clicking a row in the table or a bubble in the matrix. The previous
+  // auto-open behavior felt like an uncloseable sidebar.
   const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
 
-  // The contract opens the drawer pre-selected on Google Ads. We mirror that
-  // on first mount so the screen matches the visual reference. Users still
-  // close (Esc / X) and re-open by clicking any row or bubble.
-  useEffect(() => {
-    setSelectedChannel(data.selectedChannelDrawer.channel);
-  }, [data.selectedChannelDrawer.channel]);
-
+  // When the drawer is closed we still need to feed it a valid `drawer`
+  // payload (Radix renders the component tree even while hidden). Fall back
+  // to the contract's default channel so the component never sees `null`.
   const drawer = data.getDrawerForChannel(
     selectedChannel ?? data.selectedChannelDrawer.channel,
   );

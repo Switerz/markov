@@ -27,7 +27,7 @@ export type ChannelDetailsDrawerProps = {
 const parseDeltaSign = (s: string): StatTone =>
   s.trim().startsWith("-") ? "negative" : "positive";
 
-function ChannelHeader({
+function ChannelHeaderTitle({
   channel,
   recommendation,
   tone,
@@ -38,17 +38,15 @@ function ChannelHeader({
 }) {
   const icon = channelIcon(channel, 16);
   return (
-    <div className={styles.header}>
-      <div className={styles.headerLeft}>
-        <span className={styles.channelIcon} aria-hidden>
-          {icon ?? channelInitial(channel)}
-        </span>
-        <h2 className={styles.channelName}>{channel}</h2>
-      </div>
+    <span className={styles.titleSlot}>
+      <span className={styles.channelIcon} aria-hidden>
+        {icon ?? channelInitial(channel)}
+      </span>
+      <span className={styles.channelName}>{channel}</span>
       <Badge tone={tone} variant="soft">
         {recommendation}
       </Badge>
-    </div>
+    </span>
   );
 }
 
@@ -172,12 +170,18 @@ export function ChannelDetailsDrawer({
   drawer,
 }: ChannelDetailsDrawerProps) {
   return (
-    <Drawer open={open} onOpenChange={onOpenChange} width={420} title="">
-      <ChannelHeader
-        channel={drawer.channel}
-        recommendation={drawer.recommendation}
-        tone={drawer.tone}
-      />
+    <Drawer
+      open={open}
+      onOpenChange={onOpenChange}
+      width={420}
+      title={
+        <ChannelHeaderTitle
+          channel={drawer.channel}
+          recommendation={drawer.recommendation}
+          tone={drawer.tone}
+        />
+      }
+    >
       <Tabs.Root defaultValue="Resumo" className={styles.tabsRoot}>
         <Tabs.List>
           {drawer.tabs.map((t) => (

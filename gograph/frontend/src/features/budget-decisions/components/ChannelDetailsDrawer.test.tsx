@@ -21,8 +21,10 @@ const renderDrawer = () =>
 describe("ChannelDetailsDrawer", () => {
   it("renders the channel header with recommendation", () => {
     renderDrawer();
+    // Header is composed inside Radix Dialog.Title (level 2): icon + channel
+    // name + recommendation badge. Match the channel name within the heading.
     expect(
-      screen.getByRole("heading", { level: 2, name: "Google Ads" }),
+      screen.getByRole("heading", { level: 2, name: /Google Ads/i }),
     ).toBeInTheDocument();
     expect(screen.getAllByText("Escalar").length).toBeGreaterThan(0);
   });

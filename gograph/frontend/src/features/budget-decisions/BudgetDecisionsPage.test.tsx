@@ -16,9 +16,14 @@ const renderPage = () =>
 describe("BudgetDecisionsPage", () => {
   it("renders the screen title", () => {
     renderPage();
-    // The H1 lives in the TopBar, which Radix Dialog marks as aria-hidden
-    // when the drawer is open — so we query by text rather than role.
-    expect(screen.getByText("Decisões de Budget")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Decisões de Budget" }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not auto-open the drawer on mount", () => {
+    renderPage();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("renders the 4 recommendation summary cards", () => {
@@ -44,11 +49,15 @@ describe("BudgetDecisionsPage", () => {
     });
   });
 
-  it("opens the drawer pre-selected on Google Ads with key sections visible", () => {
+  it("opens the drawer after clicking a row, with channel name in the header", () => {
     renderPage();
+    // Click the Google Ads row in the table.
+    const googleCell = screen.getAllByText("Google Ads")[0];
+    fireEvent.click(googleCell);
     const drawer = screen.getByRole("dialog");
+    // Title is rendered via Radix Dialog.Title (level 2 by default).
     expect(
-      within(drawer).getByRole("heading", { level: 2, name: "Google Ads" }),
+      within(drawer).getByRole("heading", { level: 2, name: /Google Ads/i }),
     ).toBeInTheDocument();
     // "Recomendação" appears as both a column header and a drawer section
     // title; we scope the assertion to the drawer.
@@ -60,16 +69,21 @@ describe("BudgetDecisionsPage", () => {
 
   it("updates the drawer header when a different table row is clicked", () => {
     renderPage();
+    fireEvent.click(screen.getAllByText("Google Ads")[0]);
+    expect(
+      screen.getByRole("heading", { level: 2, name: /Google Ads/i }),
+    ).toBeInTheDocument();
     // Click the Meta Ads row in the table.
     const metaCell = screen.getAllByText("Meta Ads")[0];
     fireEvent.click(metaCell);
     expect(
-      screen.getByRole("heading", { level: 2, name: "Meta Ads" }),
+      screen.getByRole("heading", { level: 2, name: /Meta Ads/i }),
     ).toBeInTheDocument();
   });
 
   it("Ver canal 360 link uses the slugified channel name", () => {
     renderPage();
+    fireEvent.click(screen.getAllByText("Google Ads")[0]);
     const drawer = screen.getByRole("dialog");
     const link = within(drawer).getByRole("link", {
       name: /Ver canal 360/i,
