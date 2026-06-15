@@ -34,3 +34,8 @@
   flex-direction: column;
   gap: 2px;
 }
+
+.chartWrapper {
+  min-width: 0;
+  overflow: hidden;
+}

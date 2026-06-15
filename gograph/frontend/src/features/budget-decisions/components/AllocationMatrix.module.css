@@ -4,6 +4,8 @@
 
 .body {
   padding-block: var(--gg-space-2);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .helper {

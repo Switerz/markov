@@ -43,7 +43,14 @@
 }
 .search:focus { border-color: var(--gg-blue); background: var(--gg-surface); }
 
-.scroll { overflow: auto; max-height: 60vh; }
+.scroll {
+  overflow: auto;
+  max-height: 60vh;
+  -webkit-overflow-scrolling: touch;
+}
+.scroll table {
+  min-width: max-content;
+}
 
 .table {
   width: 100%;

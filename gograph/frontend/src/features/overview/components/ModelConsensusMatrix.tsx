@@ -47,7 +47,7 @@ export function ModelConsensusMatrix({ consensus }: ModelConsensusMatrixProps) {
           </Select>
         </div>
       </Card.Header>
-      <Card.Body>
+      <Card.Body className={styles.matrixWrapper}>
         <BubbleMatrix
           points={points}
           axes={consensus.axes}

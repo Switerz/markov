@@ -101,7 +101,7 @@ export function JourneySankeyPanel({
           </div>
         </div>
       </Card.Header>
-      <Card.Body>
+      <Card.Body className={styles.chartWrapper}>
         <SankeyJourneyChart
           nodes={nodes}
           links={links}

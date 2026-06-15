@@ -31,7 +31,7 @@ export function TransitionMatrixHeatmap({
           </div>
         </div>
       </Card.Header>
-      <Card.Body>
+      <Card.Body className={styles.heatmapWrapper}>
         <TransitionHeatmap
           columns={matrix.columns}
           rows={matrix.rows}
