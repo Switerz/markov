@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--gg-space-4);
-  padding: var(--gg-space-4) var(--gg-space-5);
+  padding: var(--gg-space-3) var(--gg-space-4);
   border-bottom: 1px solid var(--gg-border);
   background: var(--gg-surface);
   position: sticky;
@@ -22,7 +22,7 @@
 .breadcrumb a:hover { color: var(--gg-text-primary); }
 .title {
   font-family: var(--gg-font-display);
-  font-size: var(--gg-text-2xl);
+  font-size: var(--gg-text-display);
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1.2;

@@ -63,15 +63,15 @@
    * Tighter than a marketing scale — used by cards, tables, drawers, and
    * page headers across the dashboard. Body sits at 13px so dense data
    * surfaces don't feel airy. Display tops out at 26px for page H1s. */
-  --gg-text-xs:   11px;
-  --gg-text-sm:   12px;
-  --gg-text-base: 13px;
-  --gg-text-md:   14px;
-  --gg-text-lg:   16px;
-  --gg-text-xl:   18px;
-  --gg-text-2xl:  20px;
-  --gg-text-3xl:  22px;
-  --gg-text-display: 26px;
+  --gg-text-xs:   10px;
+  --gg-text-sm:   11px;
+  --gg-text-base: 12px;
+  --gg-text-md:   13px;
+  --gg-text-lg:   14px;
+  --gg-text-xl:   16px;
+  --gg-text-2xl:  18px;
+  --gg-text-3xl:  20px;
+  --gg-text-display: 22px;
 
   /* Z-index scale */
   --gg-z-dropdown: 10;

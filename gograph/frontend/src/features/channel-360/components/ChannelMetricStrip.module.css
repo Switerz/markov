@@ -1,5 +1,5 @@
 .strip {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: var(--gg-space-4);
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  gap: var(--gg-space-3);
 }
