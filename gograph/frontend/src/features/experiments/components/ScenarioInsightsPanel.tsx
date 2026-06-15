@@ -5,6 +5,8 @@ import styles from "./ScenarioInsightsPanel.module.css";
 
 export type ScenarioInsightsPanelProps = {
   insights: ScenarioInsightsData;
+  /** Triggered when the user clicks one of the footer action buttons. */
+  onAction?: (label: string) => void;
 };
 
 const actionIcons: Record<string, LucideIcon> = {
@@ -12,7 +14,10 @@ const actionIcons: Record<string, LucideIcon> = {
   Bookmark,
 };
 
-export function ScenarioInsightsPanel({ insights }: ScenarioInsightsPanelProps) {
+export function ScenarioInsightsPanel({
+  insights,
+  onAction,
+}: ScenarioInsightsPanelProps) {
   return (
     <Card className={styles.root}>
       <Card.Header>
@@ -76,6 +81,7 @@ export function ScenarioInsightsPanel({ insights }: ScenarioInsightsPanelProps) 
                 key={action.id}
                 variant={action.variant}
                 iconLeft={Icon ? <Icon size={14} /> : undefined}
+                onClick={() => onAction?.(action.label)}
               >
                 {action.label}
               </Button>
