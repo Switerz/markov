@@ -1,0 +1,42 @@
+.pathCell {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--gg-text-primary);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: var(--gg-radius-pill);
+  background: var(--gg-surface-soft);
+  border: 1px solid var(--gg-border);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.separator {
+  color: var(--gg-text-secondary);
+  display: inline-flex;
+}
+
+.rank {
+  font-weight: 600;
+  color: var(--gg-text-primary);
+}
+
+.participation {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.footerAction {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+}
