@@ -7,9 +7,8 @@ import {
   type KeyboardEvent,
 } from "react";
 import type { Tone } from "../tokens/tokens";
+import { toneColor } from "./toneColor";
 import styles from "./BubbleMatrix.module.css";
-
-const toneColor = (tone: Tone): string => `var(--gg-${tone})`;
 
 export type BubblePoint = {
   id: string;

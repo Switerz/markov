@@ -1,6 +1,7 @@
 import { useMemo, type ReactNode } from "react";
 import { ResponsiveSankey } from "@nivo/sankey";
 import type { Tone } from "../tokens/tokens";
+import { toneColor } from "./toneColor";
 import styles from "./SankeyJourneyChart.module.css";
 
 export type SankeyNode = { id: string; tone?: Tone; icon?: ReactNode };
@@ -16,7 +17,6 @@ export type SankeyJourneyChartProps = {
 type RawNode = { id: string; tone?: Tone };
 type RawLink = { source: string; target: string; value: number };
 
-const toneColor = (tone: Tone): string => `var(--gg-${tone})`;
 const NEUTRAL = "var(--gg-neutral)";
 
 export function SankeyJourneyChart({

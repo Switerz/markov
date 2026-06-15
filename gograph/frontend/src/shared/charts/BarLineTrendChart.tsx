@@ -11,6 +11,7 @@ import {
   YAxis,
 } from "recharts";
 import type { Tone } from "../tokens/tokens";
+import { toneColor } from "./toneColor";
 import styles from "./BarLineTrendChart.module.css";
 
 export type TrendBar = { key: string; value: number; tone: Tone; label?: string };
@@ -27,8 +28,6 @@ export type BarLineTrendChartProps = {
   lineAxisLabel?: string;
   height?: number;
 };
-
-const toneColor = (tone: Tone): string => `var(--gg-${tone})`;
 
 type FlatRow = Record<string, number | string> & { period: string };
 

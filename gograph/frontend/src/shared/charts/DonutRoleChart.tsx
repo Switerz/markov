@@ -8,6 +8,7 @@ import {
   Tooltip,
 } from "recharts";
 import type { Tone } from "../tokens/tokens";
+import { toneColor } from "./toneColor";
 import styles from "./DonutRoleChart.module.css";
 
 export type DonutSegment = {
@@ -22,8 +23,6 @@ export type DonutRoleChartProps = {
   centerLabel?: string;
   height?: number;
 };
-
-const toneColor = (tone: Tone): string => `var(--gg-${tone})`;
 
 type CustomizedSize = { width?: number; height?: number };
 
