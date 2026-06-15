@@ -1,0 +1,93 @@
+.sidebar {
+  width: 264px;
+  flex-shrink: 0;
+  background: var(--gg-surface);
+  border-right: 1px solid var(--gg-border);
+  display: flex;
+  flex-direction: column;
+  padding: var(--gg-space-5) var(--gg-space-3);
+  gap: var(--gg-space-2);
+  height: 100vh;
+  position: sticky;
+  top: 0;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--gg-space-2);
+  padding: 0 var(--gg-space-3) var(--gg-space-5);
+  text-decoration: none;
+  color: var(--gg-text-primary);
+}
+.brandMark {
+  width: 28px; height: 28px;
+  border-radius: var(--gg-radius-control);
+  background: var(--gg-blue);
+  color: #fff;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--gg-font-display);
+  font-weight: 700;
+  font-size: 16px;
+}
+.brandName {
+  font-family: var(--gg-font-display);
+  font-weight: 600;
+  font-size: 16px;
+}
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.bottom {
+  margin-top: auto;
+}
+.link {
+  display: flex;
+  align-items: center;
+  gap: var(--gg-space-3);
+  padding: 10px var(--gg-space-3);
+  border-radius: var(--gg-radius-control);
+  color: var(--gg-text-secondary);
+  text-decoration: none;
+  font-size: 14px;
+  position: relative;
+  transition: background-color 120ms ease-out, color 120ms ease-out;
+}
+.link:hover {
+  background: var(--gg-surface-soft);
+  color: var(--gg-text-primary);
+}
+.link:focus-visible {
+  outline: 2px solid var(--gg-blue);
+  outline-offset: 2px;
+}
+.active {
+  background: var(--gg-blue-soft);
+  color: var(--gg-blue);
+  font-weight: 600;
+}
+.activeDot { display: none; }
+.user {
+  display: flex;
+  align-items: center;
+  gap: var(--gg-space-3);
+  padding: var(--gg-space-3);
+  border-top: 1px solid var(--gg-border);
+  margin-top: var(--gg-space-3);
+}
+.avatar {
+  width: 32px; height: 32px;
+  border-radius: var(--gg-radius-pill);
+  background: var(--gg-indigo-soft);
+  color: var(--gg-indigo);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-weight: 600;
+  font-size: 12px;
+}
+.userBody { display: flex; flex-direction: column; line-height: 1.2; }
+.userName { font-size: 13px; font-weight: 600; color: var(--gg-text-primary); }
+.userRole { font-size: 11px; color: var(--gg-text-secondary); }
