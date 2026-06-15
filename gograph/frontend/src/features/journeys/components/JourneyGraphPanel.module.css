@@ -1,0 +1,7 @@
+.canvas {
+  width: 100%;
+  border: 1px solid var(--gg-border);
+  border-radius: var(--gg-radius-card);
+  background: var(--gg-surface-soft);
+  overflow: hidden;
+}
