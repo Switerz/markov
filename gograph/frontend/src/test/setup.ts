@@ -7,8 +7,8 @@ class ResizeObserverMock {
   disconnect() {}
 }
 if (typeof globalThis.ResizeObserver === "undefined") {
-  // @ts-expect-error attach mock to global for Radix consumers
-  globalThis.ResizeObserver = ResizeObserverMock;
+  (globalThis as unknown as { ResizeObserver: typeof ResizeObserverMock }).ResizeObserver =
+    ResizeObserverMock;
 }
 
 // jsdom lacks PointerEvent / pointer capture, which Radix Select uses.
