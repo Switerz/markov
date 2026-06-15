@@ -1,0 +1,51 @@
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gg-space-5);
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.table thead th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--gg-text-secondary);
+  padding: 0 var(--gg-space-3) var(--gg-space-2);
+  border-bottom: 1px solid var(--gg-border);
+}
+.table tbody td {
+  padding: var(--gg-space-3);
+  border-bottom: 1px solid var(--gg-border);
+  color: var(--gg-text-primary);
+  vertical-align: middle;
+}
+.table tbody tr:last-child td { border-bottom: 0; }
+.rank {
+  width: 32px;
+  color: var(--gg-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.channelCell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gg-space-2);
+}
+.channelIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--gg-radius-control);
+  background: var(--gg-surface-soft);
+  border: 1px solid var(--gg-border);
+  color: var(--gg-text-primary);
+  font-weight: 600;
+  font-size: 11px;
+}
+.right { text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 960px) {
+  .grid { grid-template-columns: 1fr; }
+}
