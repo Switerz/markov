@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Plus, Download } from "lucide-react";
 import { TopBar } from "../../app/TopBar";
-import { Button, Tabs } from "../../shared/ui";
+import { Button, Tabs, useToast } from "../../shared/ui";
+import { NewRunDialog } from "../../app/dialogs/NewRunDialog";
 import { JourneyFilters } from "./components/JourneyFilters";
 import { JourneyViewTabs } from "./components/JourneyViewTabs";
 import { JourneySankeyPanel } from "./components/JourneySankeyPanel";
@@ -24,6 +25,8 @@ export function JourneysPage() {
   const data = useJourneysData();
   const graph = useJourneyGraphMock(data);
   const [tab, setTab] = useState<string>("flow");
+  const [newRunOpen, setNewRunOpen] = useState(false);
+  const toast = useToast();
 
   return (
     <>
@@ -32,16 +35,25 @@ export function JourneysPage() {
         subtitle={data.screen.subtitle}
         actions={
           <>
-            <Button variant="primary" iconLeft={<Plus size={16} />}>
+            <Button
+              variant="primary"
+              iconLeft={<Plus size={16} />}
+              onClick={() => setNewRunOpen(true)}
+            >
               Nova execução
             </Button>
-            <Button variant="secondary" iconLeft={<Download size={16} />}>
+            <Button
+              variant="secondary"
+              iconLeft={<Download size={16} />}
+              onClick={() => toast.push("Exportação em preparação", "blue")}
+            >
               Exportar
             </Button>
           </>
         }
         filters={<JourneyFilters filters={data.filters} />}
       />
+      <NewRunDialog open={newRunOpen} onOpenChange={setNewRunOpen} />
       <div className={styles.page}>
         <Tabs.Root value={tab} onValueChange={setTab}>
           <JourneyViewTabs tabs={data.viewTabs} />

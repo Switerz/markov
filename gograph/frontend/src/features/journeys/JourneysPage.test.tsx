@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { TooltipProvider } from "../../shared/ui";
+import { Providers } from "../../app/Providers";
 
 // xyflow does not render under jsdom; mock the graph panel so the page test
 // can mount the default tab safely.
@@ -14,9 +14,9 @@ import { JourneysPage } from "./JourneysPage";
 const renderPage = () =>
   render(
     <MemoryRouter>
-      <TooltipProvider>
+      <Providers>
         <JourneysPage />
-      </TooltipProvider>
+      </Providers>
     </MemoryRouter>,
   );
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { Providers } from "../../app/Providers";
 import { OverviewPage } from "./OverviewPage";
@@ -56,5 +56,16 @@ describe("OverviewPage", () => {
   it("renders confidence summary label", () => {
     renderPage();
     expect(screen.getByText(/confiança geral: alta/i)).toBeInTheDocument();
+  });
+
+  it("clicking Nova execução opens the NewRunDialog modal", () => {
+    renderPage();
+    expect(
+      screen.queryByRole("dialog", { name: /Nova execução/i }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Nova execução/i }));
+    expect(
+      screen.getByRole("dialog", { name: /Nova execução/i }),
+    ).toBeInTheDocument();
   });
 });

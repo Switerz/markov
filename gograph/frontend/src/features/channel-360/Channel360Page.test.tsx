@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { TooltipProvider } from "../../shared/ui";
+import { Providers } from "../../app/Providers";
 import { Channel360Page } from "./Channel360Page";
 
 const renderPage = () =>
@@ -9,14 +9,14 @@ const renderPage = () =>
     <MemoryRouter
       initialEntries={["/decisoes-de-budget/canais/google-ads"]}
     >
-      <TooltipProvider>
+      <Providers>
         <Routes>
           <Route
             path="/decisoes-de-budget/canais/:slug"
             element={<Channel360Page />}
           />
         </Routes>
-      </TooltipProvider>
+      </Providers>
     </MemoryRouter>,
   );
 

@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { Download, Plus } from "lucide-react";
 import { TopBar } from "../../app/TopBar";
-import { Button } from "../../shared/ui";
+import { Button, useToast } from "../../shared/ui";
+import { NewRunDialog } from "../../app/dialogs/NewRunDialog";
 import { OverviewHeaderFilters } from "./components/OverviewHeaderFilters";
 import { MetricCardGrid } from "./components/MetricCardGrid";
 import { PriorityDecisionCarousel } from "./components/PriorityDecisionCarousel";
@@ -16,6 +18,8 @@ export function OverviewPage() {
   // api-backed hook keyed on { account, period, compareWith, executionId }.
   const data = useOverviewData();
   const { filters, set } = useOverviewFilters();
+  const toast = useToast();
+  const [newRunOpen, setNewRunOpen] = useState(false);
   return (
     <>
       <TopBar
@@ -29,15 +33,24 @@ export function OverviewPage() {
         }
         actions={
           <>
-            <Button variant="primary" iconLeft={<Plus size={16} />}>
+            <Button
+              variant="primary"
+              iconLeft={<Plus size={16} />}
+              onClick={() => setNewRunOpen(true)}
+            >
               Nova execução
             </Button>
-            <Button variant="secondary" iconLeft={<Download size={16} />}>
+            <Button
+              variant="secondary"
+              iconLeft={<Download size={16} />}
+              onClick={() => toast.push("Exportação em preparação", "blue")}
+            >
               Exportar
             </Button>
           </>
         }
       />
+      <NewRunDialog open={newRunOpen} onOpenChange={setNewRunOpen} />
       <div className={styles.page}>
         <MetricCardGrid metrics={data.metrics} />
         <PriorityDecisionCarousel decisions={data.priorityDecisions} />
