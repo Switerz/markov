@@ -5,7 +5,7 @@
   border-radius: var(--gg-radius-card);
   flex-shrink: 0;
 }
-.sm { width: 28px; height: 28px; }
+.sm { width: 24px; height: 24px; }
 .md { width: 36px; height: 36px; }
 .lg { width: 44px; height: 44px; }
 

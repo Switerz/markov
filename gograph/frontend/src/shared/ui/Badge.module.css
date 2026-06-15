@@ -8,8 +8,8 @@
   padding: 4px 10px;
   border: 1px solid transparent;
 }
-.sm { font-size: 12px; padding: 4px 8px; }
-.md { font-size: 12px; padding: 4px 10px; }
+.sm { font-size: var(--gg-text-xs); padding: 1px 8px; }
+.md { font-size: var(--gg-text-sm); padding: 2px 10px; }
 
 /* SOFT (default) — token-soft bg + strong color for WCAG AA contrast */
 .variant_soft.tone_blue    { background: var(--gg-blue-soft);    color: var(--gg-blue-strong); }

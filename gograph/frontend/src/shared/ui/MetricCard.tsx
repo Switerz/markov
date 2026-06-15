@@ -31,7 +31,7 @@ export function MetricCard({
   const content = (
     <>
       <div className={styles.head}>
-        <IconTile tone={tone}>{icon}</IconTile>
+        <IconTile tone={tone} size="sm">{icon}</IconTile>
         <h2 className={styles.title}>{title}</h2>
       </div>
       <div className={styles.value}>{value}</div>

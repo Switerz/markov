@@ -1,5 +1,5 @@
 .root {
-  padding: var(--gg-space-4) var(--gg-space-5);
+  padding: var(--gg-space-3) var(--gg-space-4);
   display: flex;
   flex-direction: column;
   gap: var(--gg-space-2);
@@ -18,7 +18,7 @@
 }
 .title {
   font-family: var(--gg-font-display);
-  font-size: 13px;
+  font-size: var(--gg-text-sm);
   font-weight: 500;
   color: var(--gg-text-secondary);
   margin: 0;
@@ -26,14 +26,14 @@
 }
 .value {
   font-family: var(--gg-font-display);
-  font-size: 26px;
+  font-size: var(--gg-text-2xl);
   font-weight: 600;
   color: var(--gg-text-primary);
   line-height: 1.15;
   letter-spacing: -0.01em;
 }
 .subtitle {
-  font-size: 12px;
+  font-size: var(--gg-text-xs);
   color: var(--gg-text-secondary);
 }
 .delta {
