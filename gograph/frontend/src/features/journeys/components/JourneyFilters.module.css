@@ -1,0 +1,18 @@
+.root {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gg-space-2);
+}
+
+.switchGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gg-space-2);
+  padding: 6px 10px;
+  border: 1px solid var(--gg-border);
+  border-radius: var(--gg-radius-control);
+  background: var(--gg-surface);
+  font-size: 13px;
+  color: var(--gg-text-primary);
+}
