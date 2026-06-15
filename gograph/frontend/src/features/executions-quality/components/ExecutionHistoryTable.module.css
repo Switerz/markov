@@ -1,0 +1,168 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gg-space-4);
+  padding: var(--gg-space-4) var(--gg-space-5);
+  border-bottom: 1px solid var(--gg-border);
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gg-space-1);
+  min-width: 0;
+}
+
+.title {
+  font-family: var(--gg-font-display);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--gg-text-primary);
+  margin: 0;
+}
+
+.headerControls {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gg-space-3);
+}
+
+.searchWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 240px;
+  max-width: 100%;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 10px;
+  color: var(--gg-text-secondary);
+  pointer-events: none;
+}
+
+.search {
+  width: 100%;
+  padding: 8px 10px 8px 30px;
+  font-size: 13px;
+  color: var(--gg-text-primary);
+  background: var(--gg-surface-soft);
+  border: 1px solid var(--gg-border);
+  border-radius: var(--gg-radius-control);
+  outline: none;
+  transition: border-color 120ms ease-out, background 120ms ease-out;
+}
+
+.search:focus {
+  border-color: var(--gg-blue);
+  background: var(--gg-surface);
+}
+
+.body {
+  padding: 0;
+}
+
+.periodCell {
+  font-weight: 600;
+  color: var(--gg-text-primary);
+}
+
+.confidenceCell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gg-space-2);
+}
+
+.createdCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.createdBy {
+  font-weight: 600;
+  color: var(--gg-text-primary);
+  font-size: 13px;
+}
+
+.createdAt {
+  color: var(--gg-text-secondary);
+  font-size: 12px;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gg-space-3);
+  padding: var(--gg-space-3) var(--gg-space-5);
+  border-top: 1px solid var(--gg-border);
+  background: var(--gg-surface-soft);
+}
+
+.summary {
+  font-size: 12px;
+  color: var(--gg-text-secondary);
+}
+
+.pagination {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pageBtn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--gg-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: var(--gg-radius-control);
+  cursor: pointer;
+}
+
+.pageBtn:hover {
+  background: var(--gg-surface);
+  border-color: var(--gg-border);
+}
+
+.pageBtnCurrent {
+  color: var(--gg-text-primary);
+  font-weight: 700;
+  background: var(--gg-surface);
+  border-color: var(--gg-border);
+}
+
+.ellipsis {
+  font-size: 13px;
+  color: var(--gg-text-secondary);
+  padding: 0 4px;
+}
+
+.menu {
+  background: var(--gg-surface);
+  border: 1px solid var(--gg-border);
+  border-radius: var(--gg-radius-control);
+  padding: 4px;
+  box-shadow: var(--gg-shadow);
+  min-width: 160px;
+}
+
+.menuItem {
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--gg-text-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  outline: 0;
+}
+
+.menuItem:hover,
+.menuItem[data-highlighted] {
+  background: var(--gg-surface-soft);
+}
