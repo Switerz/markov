@@ -1,0 +1,139 @@
+.root {
+  position: sticky;
+  top: calc(var(--gg-space-5));
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gg-space-4);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gg-space-2);
+}
+
+.sectionTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gg-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0;
+}
+
+.hypothesis {
+  margin: 0;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--gg-text-primary);
+  line-height: 1.5;
+  padding-left: 10px;
+  border-left: 3px solid var(--gg-blue);
+}
+
+.list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--gg-text-primary);
+  line-height: 1.45;
+}
+
+.risk {
+  background: color-mix(in srgb, var(--gg-orange) 10%, var(--gg-surface));
+  border: 1px solid color-mix(in srgb, var(--gg-orange) 30%, var(--gg-border));
+  border-radius: var(--gg-radius-control);
+  padding: var(--gg-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gg-space-2);
+}
+
+.riskHeader {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gg-orange);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.nextTest {
+  background: var(--gg-surface-soft);
+  border: 1px solid var(--gg-border);
+  border-radius: var(--gg-radius-control);
+  padding: var(--gg-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gg-space-2);
+}
+
+.nextTestTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gg-text-primary);
+}
+
+.nextTestDescription {
+  margin: 0;
+  font-size: 12px;
+  color: var(--gg-text-secondary);
+  line-height: 1.5;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: var(--gg-radius-pill);
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--gg-border);
+  background: var(--gg-surface);
+  color: var(--gg-text-primary);
+}
+
+.chip[data-tone="green"] {
+  background: color-mix(in srgb, var(--gg-green) 12%, var(--gg-surface));
+  border-color: color-mix(in srgb, var(--gg-green) 30%, var(--gg-border));
+  color: var(--gg-green);
+}
+
+.chip[data-tone="cyan"] {
+  background: color-mix(in srgb, var(--gg-cyan) 12%, var(--gg-surface));
+  border-color: color-mix(in srgb, var(--gg-cyan) 30%, var(--gg-border));
+  color: var(--gg-cyan);
+}
+
+.chip[data-tone="blue"] {
+  background: color-mix(in srgb, var(--gg-blue) 10%, var(--gg-surface));
+  border-color: color-mix(in srgb, var(--gg-blue) 30%, var(--gg-border));
+  color: var(--gg-blue);
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gg-space-2);
+  width: 100%;
+}
+
+.actions > * {
+  width: 100%;
+  justify-content: center;
+}
