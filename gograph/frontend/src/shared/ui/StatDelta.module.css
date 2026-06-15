@@ -1,0 +1,13 @@
+.root {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.value { font-weight: 600; }
+.label { color: var(--gg-text-secondary); font-weight: 400; }
+.positive { color: var(--gg-green); }
+.negative { color: var(--gg-red); }
+.warning  { color: var(--gg-orange); }
+.neutral  { color: var(--gg-text-secondary); }
