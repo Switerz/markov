@@ -6,6 +6,7 @@ import { Channel360Page } from "../features/channel-360/Channel360Page";
 import { JourneysPage } from "../features/journeys/JourneysPage";
 import { ExperimentsPage } from "../features/experiments/ExperimentsPage";
 import { ExecutionsQualityPage } from "../features/executions-quality/ExecutionsQualityPage";
+import { SettingsPage } from "../features/settings/SettingsPage";
 
 export const router = createBrowserRouter([
   {
@@ -18,6 +19,7 @@ export const router = createBrowserRouter([
       { path: "jornadas", element: <JourneysPage /> },
       { path: "experimentos", element: <ExperimentsPage /> },
       { path: "execucoes-e-qualidade", element: <ExecutionsQualityPage /> },
+      { path: "configuracoes", element: <SettingsPage /> },
     ],
   },
 ]);
