@@ -1,0 +1,16 @@
+.root {
+  position: relative;
+  width: 100%;
+  font-family: var(--gg-font-body);
+  color: var(--gg-text-primary);
+}
+
+.metricLabel {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: 11px;
+  color: var(--gg-text-secondary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
