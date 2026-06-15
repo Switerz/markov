@@ -1,0 +1,66 @@
+.root {
+  position: relative;
+  width: 100%;
+  font-family: var(--gg-font-body);
+  color: var(--gg-text-primary);
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.bubble {
+  cursor: pointer;
+  outline: none;
+  transition: transform 120ms ease;
+}
+
+.bubble:focus-visible > circle {
+  stroke: var(--gg-text-primary);
+  stroke-width: 2;
+}
+
+.bubble:hover > circle {
+  filter: brightness(0.95);
+}
+
+.label {
+  font-size: 11px;
+  fill: var(--gg-text-primary);
+  pointer-events: none;
+}
+
+.axisTick {
+  font-size: 11px;
+  fill: var(--gg-text-secondary);
+}
+
+.axisTitle {
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--gg-text-primary);
+}
+
+.quadrantLabel {
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--gg-text-primary);
+}
+
+.quadrantDescription {
+  font-size: 11px;
+  fill: var(--gg-text-secondary);
+}
+
+.gridLine {
+  stroke: var(--gg-border);
+  stroke-width: 1;
+}
+
+.legend {
+  font-size: 11px;
+  fill: var(--gg-text-secondary);
+}
