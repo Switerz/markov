@@ -13,8 +13,9 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Plus, Play, Trash2 } from "lucide-react";
-import { Button, Card } from "../../../shared/ui";
+import { Button, Card, useToast } from "../../../shared/ui";
 import { useScenarioSimulation } from "../../../shared/hooks/useScenarioSimulation";
+import { useActiveRun } from "../../../app/hooks/useActiveRun";
 import type { EstimatedMetric, JourneyBuilder as JourneyBuilderData } from "../types";
 import styles from "./JourneyPathBuilder.module.css";
 
@@ -94,6 +95,24 @@ export function JourneyPathBuilder({ builder }: JourneyPathBuilderProps) {
     setNodes([]);
     setEdges([]);
   }
+
+  const toast = useToast();
+  const activeRun = useActiveRun();
+
+  const onSimulate = useCallback(() => {
+    if (nodes.length < 2) return;
+    // TODO(api): when an activeRun is available, persist via api.createScenario
+    // and call api.analyzeScenario(id) — for now we use the local simulation
+    // results that are already rendered below.
+    if (activeRun) {
+      toast.push(
+        `Caminho simulado (run ${activeRun.id}) — usando estimativa local`,
+        "blue",
+      );
+    } else {
+      toast.push("Caminho simulado localmente", "blue");
+    }
+  }, [activeRun, nodes.length, toast]);
 
   const sim = useScenarioSimulation<EstimatedMetric>(
     nodes.map((n, i) => ({
@@ -187,6 +206,8 @@ export function JourneyPathBuilder({ builder }: JourneyPathBuilderProps) {
             variant="primary"
             size="sm"
             iconLeft={<Play size={14} aria-hidden />}
+            onClick={onSimulate}
+            disabled={nodes.length < 2}
           >
             {builder.primaryAction}
           </Button>

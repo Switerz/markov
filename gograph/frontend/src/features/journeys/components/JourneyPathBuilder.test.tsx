@@ -1,11 +1,16 @@
 import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { JourneyPathBuilder } from "./JourneyPathBuilder";
+import { Providers } from "../../../app/Providers";
 import { journeysMock } from "../journeys.mock";
 
 describe("JourneyPathBuilder", () => {
   it("renders the title, palette chips (at least 14), and custom input", () => {
-    render(<JourneyPathBuilder builder={journeysMock.journeyBuilder} />);
+    render(
+      <Providers>
+        <JourneyPathBuilder builder={journeysMock.journeyBuilder} />
+      </Providers>,
+    );
     expect(
       screen.getByText(journeysMock.journeyBuilder.title),
     ).toBeInTheDocument();
@@ -15,7 +20,11 @@ describe("JourneyPathBuilder", () => {
   });
 
   it("adds a node when a palette chip is clicked", () => {
-    render(<JourneyPathBuilder builder={journeysMock.journeyBuilder} />);
+    render(
+      <Providers>
+        <JourneyPathBuilder builder={journeysMock.journeyBuilder} />
+      </Providers>,
+    );
     const canvas = screen.getByTestId("journey-canvas");
     expect(canvas.querySelectorAll(".react-flow__node").length).toBe(0);
 
@@ -29,7 +38,11 @@ describe("JourneyPathBuilder", () => {
   });
 
   it("clears the canvas when the secondary action is clicked", () => {
-    render(<JourneyPathBuilder builder={journeysMock.journeyBuilder} />);
+    render(
+      <Providers>
+        <JourneyPathBuilder builder={journeysMock.journeyBuilder} />
+      </Providers>,
+    );
     const palette = screen.getByRole("toolbar", { name: /Paleta de canais/i });
     fireEvent.click(within(palette).getByRole("button", { name: /Email/i }));
     fireEvent.click(within(palette).getByRole("button", { name: /^SMS$/i }));
@@ -44,7 +57,11 @@ describe("JourneyPathBuilder", () => {
   });
 
   it("adds a hypothetical node from the custom input", () => {
-    render(<JourneyPathBuilder builder={journeysMock.journeyBuilder} />);
+    render(
+      <Providers>
+        <JourneyPathBuilder builder={journeysMock.journeyBuilder} />
+      </Providers>,
+    );
     const input = screen.getByLabelText(/Canal personalizado/i);
     fireEvent.change(input, { target: { value: "Podcast Ads" } });
     fireEvent.click(screen.getByRole("button", { name: /^Adicionar$/i }));
