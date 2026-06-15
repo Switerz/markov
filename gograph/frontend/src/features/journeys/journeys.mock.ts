@@ -1,4 +1,240 @@
 import type { JourneysData } from "./types";
 
-// Populated in Phase 8. Mocked data lives here until the API covers everything.
-export const journeysMock: JourneysData = {} as const;
+// Mirrors docs/gograph-refactor-instrucoes/04-jornadas.md JSON contract.
+// Note: any `purple` tone in the source JSON is mapped to `indigo` per the
+// shared visual contract (no purple in tokens). `gray` falls back to `neutral`.
+export const journeysMock: JourneysData = {
+  screen: {
+    id: "journeys",
+    title: "Jornadas",
+    subtitle:
+      "Explore e compreenda os caminhos que levam seus usuários até a conversão.",
+    route: "/jornadas",
+    activeNav: "Jornadas",
+  },
+  topBar: {
+    actions: [
+      { id: "newExecution", label: "Nova execução", icon: "Plus", variant: "primary" },
+      { id: "export", label: "Exportar", icon: "Download", variant: "secondary" },
+    ],
+  },
+  filters: [
+    {
+      id: "audience",
+      type: "select",
+      icon: "Users",
+      value: "Convertidos e não convertidos",
+    },
+    {
+      id: "period",
+      type: "dateRange",
+      icon: "Calendar",
+      value: "01 Mai — 31 Mai 2026",
+    },
+    {
+      id: "journeyLength",
+      type: "select",
+      label: "Comprimento da jornada",
+      value: "1 — 10+ toques",
+    },
+    {
+      id: "origin",
+      type: "select",
+      label: "Origem",
+      value: "Todos os canais",
+    },
+    {
+      id: "destination",
+      type: "select",
+      label: "Destino",
+      value: "Conversão",
+    },
+    { id: "hideDirect", type: "switch", label: "Ocultar diretos", value: false },
+    { id: "hideSelfLoops", type: "switch", label: "Ocultar self-loops", value: false },
+  ],
+  viewTabs: [
+    { id: "flow", label: "Fluxo", icon: "Workflow", active: true },
+    { id: "graph", label: "Grafo", icon: "Network" },
+    { id: "paths", label: "Caminhos", icon: "Route" },
+    { id: "matrix", label: "Matriz", icon: "Grid3X3" },
+  ],
+  flowMetric: { label: "Métrica do fluxo:", value: "Receita atribuída" },
+  journeyFlow: {
+    title: "Fluxo de jornadas",
+    subtitle: "Participação de jornadas por toque → Receita atribuída",
+    leftNodes: [
+      { channel: "Organic Social", value: "32,1%", tone: "blue" },
+      { channel: "Google Ads", value: "27,4%", tone: "green" },
+      // JSON used "purple" → mapped to "indigo" per visual contract.
+      { channel: "Meta Ads", value: "18,6%", tone: "indigo" },
+      { channel: "Email", value: "8,2%", tone: "orange" },
+      { channel: "Referral", value: "6,1%", tone: "red" },
+      // JSON used "gray" → mapped to "neutral".
+      { channel: "Outros", value: "7,6%", tone: "neutral" },
+    ],
+    middleNodes: [
+      { channel: "Google Ads", value: "23,5%", icon: "GoogleAds" },
+      { channel: "Direct", value: "30,2%", icon: "ExternalLink" },
+      { channel: "Meta Ads", value: "15,6%", icon: "Meta" },
+      { channel: "Email", value: "8,6%", icon: "Mail" },
+      { channel: "WhatsApp CRM", value: "12,1%", icon: "MessageCircle" },
+      { channel: "Outros", value: "10,0%", icon: "Ellipsis" },
+    ],
+    outcomeNodes: [
+      { label: "Conversão", value: "38,7%", tone: "green", icon: "CircleCheck" },
+      { label: "Não converteu", value: "61,3%", tone: "red", icon: "CircleX" },
+    ],
+    footer: {
+      coverage: "100% dos caminhos estão sendo exibidos",
+      legend: "Espessura = participação | Nós = toques | Cores = canais",
+      action: "Ver como Grafo",
+    },
+  },
+  journeyBuilder: {
+    title: "Construir jornada",
+    subtitle: "Monte um caminho hipotético e simule seu desempenho esperado.",
+    path: [
+      { step: 1, label: "Entrada" },
+      { step: 2, label: "Meta Ads" },
+      { step: 3, label: "WhatsApp CRM" },
+      { step: 4, label: "Conversão", tone: "green" },
+    ],
+    actions: [{ id: "addTouchpoint", label: "Adicionar touchpoint", icon: "Plus" }],
+    quickSuggestions: ["Google Ads", "Direct", "Organic Social", "Email"],
+    estimatedInterpretation: {
+      description: "Baseado em dados dos últimos 31 dias",
+      metrics: [
+        { title: "Participação esperada", value: "3,24%" },
+        { title: "Frequência média", value: "4,2 toques" },
+        { title: "Conversão esperada", value: "6,82%" },
+        { title: "Receita esperada", value: "R$ 18,73", subtitle: "por usuário" },
+      ],
+    },
+    primaryAction: "Simular caminho",
+    secondaryAction: "Limpar",
+  },
+  topPaths: {
+    title: "Top caminhos",
+    columns: [
+      "#",
+      "Caminho",
+      "Participação",
+      "Receita atribuída",
+      "Conversões",
+      "Ticket médio",
+      "Tempo até conversão",
+    ],
+    rows: [
+      {
+        rank: 1,
+        path: "Organic Social > Google Ads > Direct > Conversão",
+        participation: "6,21%",
+        delta: "+12,4%",
+        revenue: "R$ 1,24M",
+        conversions: "5.642",
+        ticket: "R$ 220,11",
+        timeToConversion: "2,6 dias",
+      },
+      {
+        rank: 2,
+        path: "Google Ads > Direct > Conversão",
+        participation: "5,08%",
+        delta: "+8,7%",
+        revenue: "R$ 1,02M",
+        conversions: "4.912",
+        ticket: "R$ 207,98",
+        timeToConversion: "1,9 dias",
+      },
+      {
+        rank: 3,
+        path: "Meta Ads > WhatsApp CRM > Conversão",
+        participation: "3,24%",
+        delta: "+14,6%",
+        revenue: "R$ 648K",
+        conversions: "3.102",
+        ticket: "R$ 208,77",
+        timeToConversion: "2,3 dias",
+      },
+      {
+        rank: 4,
+        path: "Email > Direct > Conversão",
+        participation: "2,71%",
+        delta: "-4,5%",
+        revenue: "R$ 412K",
+        conversions: "1.976",
+        ticket: "R$ 208,47",
+        timeToConversion: "2,8 dias",
+      },
+      {
+        rank: 5,
+        path: "Organic Social > Direct > Conversão",
+        participation: "2,45%",
+        delta: "+6,1%",
+        revenue: "R$ 372K",
+        conversions: "1.654",
+        ticket: "R$ 225,09",
+        timeToConversion: "1,7 dias",
+      },
+    ],
+    action: "Ver todos os caminhos",
+  },
+  transitionMatrix: {
+    title: "Matriz de transição",
+    metric: "Participação (%)",
+    columns: [
+      "Organic Social",
+      "Google Ads",
+      "Meta Ads",
+      "Direct",
+      "WhatsApp CRM",
+      "Email",
+      "Outros",
+    ],
+    rows: [
+      { from: "Organic Social", values: [null, 23.6, 11.2, 29.8, 9.6, 7.4, 18.4] },
+      { from: "Google Ads", values: [12.3, null, 10.1, 34.7, 12.8, 6.3, 23.8] },
+      { from: "Meta Ads", values: [9.1, 14.6, null, 28.9, 20.5, 7.1, 19.8] },
+      { from: "Direct", values: [7.6, 9.7, 7.3, null, 14.2, 5.6, 55.6] },
+      { from: "WhatsApp CRM", values: [6.2, 8.3, 10.9, 22.4, null, 5.9, 46.3] },
+      { from: "Email", values: [5.8, 6.9, 6.2, 23.1, 10.8, null, 47.2] },
+      { from: "Outros", values: [6.7, 7.8, 6.5, 22.6, 9.4, 4.6, 42.4] },
+    ],
+    action: "Ver matriz completa",
+  },
+  loopsAndPatterns: {
+    title: "Loops e padrões",
+    filter: "Todos os padrões",
+    columns: ["Participação", "Conversão"],
+    items: [
+      {
+        pattern: "WhatsApp CRM → WhatsApp CRM",
+        description: "Loop de 2 toques",
+        participation: "7,32%",
+        conversion: "12,1%",
+        tone: "green",
+      },
+      {
+        pattern: "Meta Ads → Meta Ads",
+        description: "Loop de 2 toques",
+        participation: "5,48%",
+        conversion: "9,6%",
+        tone: "blue",
+      },
+      {
+        pattern: "Direct → Direct",
+        description: "Loop de 2 toques",
+        participation: "3,91%",
+        conversion: "8,4%",
+        tone: "neutral",
+      },
+      {
+        pattern: "Email → Email",
+        description: "Loop de 2 toques",
+        participation: "2,61%",
+        conversion: "7,2%",
+        tone: "orange",
+      },
+    ],
+    action: "Ver todos os loops e padrões",
+  },
+};
