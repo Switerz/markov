@@ -1,5 +1,5 @@
 import { Badge, Button, Card } from "../../../shared/ui";
-import { channelIcon, channelInitial } from "../icons";
+import { channelIcon, channelInitial } from "../../../shared/icons/channelIcons";
 import type { PriorityDecision } from "../types";
 import styles from "./DecisionCard.module.css";
 
