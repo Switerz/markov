@@ -1,0 +1,27 @@
+.list {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gg-space-3) var(--gg-space-4);
+}
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.label {
+  font-size: 11px;
+  color: var(--gg-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.value {
+  font-size: 13px;
+  color: var(--gg-text-primary);
+  font-weight: 500;
+  word-break: break-word;
+}
+@media (max-width: 720px) {
+  .list { grid-template-columns: 1fr; }
+}
