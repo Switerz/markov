@@ -90,4 +90,4 @@
 }
 .userBody { display: flex; flex-direction: column; line-height: 1.2; }
 .userName { font-size: 13px; font-weight: 600; color: var(--gg-text-primary); }
-.userRole { font-size: 11px; color: var(--gg-text-secondary); }
+.userRole { font-size: 12px; color: var(--gg-text-secondary); }

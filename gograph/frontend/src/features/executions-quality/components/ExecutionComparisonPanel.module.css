@@ -95,7 +95,7 @@
   border-radius: 6px;
   background: var(--gg-surface-soft);
   color: var(--gg-text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -136,7 +136,7 @@
 }
 
 .barValue {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--gg-text-primary);
   text-align: right;

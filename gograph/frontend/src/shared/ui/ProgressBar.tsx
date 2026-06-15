@@ -35,7 +35,7 @@ export function ProgressBar({
       >
         <div
           className={cn(styles.fill, styles[`tone_${tone}`])}
-          style={{ width: `${pct * 100}%` }}
+          style={{ transform: `scaleX(${pct})` }}
         />
       </div>
     </div>

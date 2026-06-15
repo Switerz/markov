@@ -15,18 +15,25 @@
   /* Accents */
   --gg-blue: #245BFF;
   --gg-blue-soft: #E8EEFF;
+  --gg-blue-strong: #1E40AF;
   --gg-green: #16A34A;
   --gg-green-soft: #DCFCE7;
+  --gg-green-strong: #15803D;
   --gg-red: #EF4444;
   --gg-red-soft: #FEE2E2;
+  --gg-red-strong: #B91C1C;
   --gg-orange: #F59E0B;
   --gg-orange-soft: #FEF3C7;
+  --gg-orange-strong: #B45309;
   --gg-indigo: #5B4FE5;
   --gg-indigo-soft: #E6E3FB;
+  --gg-indigo-strong: #4338CA;
   --gg-cyan: #20C7B5;
   --gg-cyan-soft: #D5F5EF;
+  --gg-cyan-strong: #0F766E;
   --gg-neutral: #5B6A89;
   --gg-neutral-soft: #EEF2FB;
+  --gg-neutral-strong: #3F4D6E;
 
   /* Radius */
   --gg-radius-card: 8px;
@@ -63,4 +70,5 @@
 }
 
 html, body { font-family: var(--gg-font-body); color: var(--gg-text-primary); background: var(--gg-bg); }
+h1, h2, h3, h4, h5, h6 { font-family: var(--gg-font-display); }
 button, input, select, textarea { font-family: inherit; }

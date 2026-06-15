@@ -30,7 +30,7 @@
   padding: var(--gg-space-3) var(--gg-space-4);
   border-radius: 12px;
   background: var(--gg-green-soft);
-  color: var(--gg-green);
+  color: var(--gg-green-strong);
 }
 
 .calloutLabel {
@@ -44,4 +44,5 @@
   color: var(--gg-text-primary);
   font-size: 13px;
   line-height: 1.5;
+  max-width: 75ch;
 }

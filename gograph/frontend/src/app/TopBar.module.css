@@ -22,9 +22,9 @@
 .breadcrumb a:hover { color: var(--gg-text-primary); }
 .title {
   font-family: var(--gg-font-display);
-  font-size: 22px;
+  font-size: 28px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
   margin: 0;
   color: var(--gg-text-primary);
 }

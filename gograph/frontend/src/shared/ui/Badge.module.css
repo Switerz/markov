@@ -5,19 +5,19 @@
   border-radius: var(--gg-radius-pill);
   font-weight: 500;
   font-size: 12px;
-  padding: 2px 10px;
+  padding: 4px 10px;
   border: 1px solid transparent;
 }
-.sm { font-size: 11px; padding: 1px 8px; }
-.md { font-size: 12px; padding: 2px 10px; }
+.sm { font-size: 12px; padding: 4px 8px; }
+.md { font-size: 12px; padding: 4px 10px; }
 
-/* SOFT (default) — token-soft bg + token color */
-.variant_soft.tone_blue    { background: var(--gg-blue-soft);    color: var(--gg-blue); }
-.variant_soft.tone_green   { background: var(--gg-green-soft);   color: var(--gg-green); }
-.variant_soft.tone_red     { background: var(--gg-red-soft);     color: var(--gg-red); }
-.variant_soft.tone_orange  { background: var(--gg-orange-soft);  color: var(--gg-orange); }
-.variant_soft.tone_indigo  { background: var(--gg-indigo-soft);  color: var(--gg-indigo); }
-.variant_soft.tone_cyan    { background: var(--gg-cyan-soft);    color: var(--gg-cyan); }
+/* SOFT (default) — token-soft bg + strong color for WCAG AA contrast */
+.variant_soft.tone_blue    { background: var(--gg-blue-soft);    color: var(--gg-blue-strong); }
+.variant_soft.tone_green   { background: var(--gg-green-soft);   color: var(--gg-green-strong); }
+.variant_soft.tone_red     { background: var(--gg-red-soft);     color: var(--gg-red-strong); }
+.variant_soft.tone_orange  { background: var(--gg-orange-soft);  color: var(--gg-orange-strong); }
+.variant_soft.tone_indigo  { background: var(--gg-indigo-soft);  color: var(--gg-indigo-strong); }
+.variant_soft.tone_cyan    { background: var(--gg-cyan-soft);    color: var(--gg-cyan-strong); }
 .variant_soft.tone_neutral { background: var(--gg-neutral-soft); color: var(--gg-text-secondary); }
 
 /* SOLID */

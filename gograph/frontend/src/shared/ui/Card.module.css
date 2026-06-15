@@ -22,6 +22,7 @@
   font-size: 13px;
   color: var(--gg-text-secondary);
   margin: 0;
+  max-width: 75ch;
 }
 .body {
   padding: var(--gg-space-4) var(--gg-space-5);

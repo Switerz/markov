@@ -60,6 +60,7 @@ function ResumoTab({ drawer }: { drawer: SelectedChannelDrawer }) {
         {drawer.metrics.map((m) => (
           <MetricCard
             key={m.title}
+            flat
             title={m.title}
             value={m.value}
             icon={<TrendingUp size={16} aria-hidden />}

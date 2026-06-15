@@ -13,7 +13,7 @@
 
 .titleBlock { display: flex; flex-direction: column; gap: 4px; }
 .title { margin: 0; font-size: 16px; font-weight: 600; color: var(--gg-text-primary); }
-.subtitle { margin: 0; font-size: 13px; color: var(--gg-text-secondary); }
+.subtitle { margin: 0; font-size: 13px; color: var(--gg-text-secondary); max-width: 75ch; }
 
 .sortGroup {
   display: inline-flex;

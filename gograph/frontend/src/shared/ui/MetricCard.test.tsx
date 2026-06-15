@@ -15,7 +15,7 @@ describe("MetricCard", () => {
         tone="blue"
       />,
     );
-    expect(screen.getByRole("heading", { level: 3, name: /receita atribuída/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: /receita atribuída/i })).toBeInTheDocument();
     expect(screen.getByText("R$ 24,8M")).toBeInTheDocument();
     expect(screen.getByText(/últimos 30 dias/i)).toBeInTheDocument();
     expect(screen.getByText("+12,4%")).toBeInTheDocument();

@@ -13,6 +13,8 @@ export type MetricCardProps = {
   delta?: { value: string; label: string; tone: StatTone };
   icon: ReactNode;
   tone: Tone;
+  /** When true, renders without elevated card chrome — use inside Drawers / other Cards. */
+  flat?: boolean;
   className?: string;
 };
 
@@ -23,13 +25,14 @@ export function MetricCard({
   delta,
   icon,
   tone,
+  flat = false,
   className,
 }: MetricCardProps) {
-  return (
-    <Card className={cn(styles.root, className)}>
+  const content = (
+    <>
       <div className={styles.head}>
         <IconTile tone={tone}>{icon}</IconTile>
-        <h3 className={styles.title}>{title}</h3>
+        <h2 className={styles.title}>{title}</h2>
       </div>
       <div className={styles.value}>{value}</div>
       {subtitle && <div className={styles.subtitle}>{subtitle}</div>}
@@ -38,6 +41,10 @@ export function MetricCard({
           <StatDelta value={delta.value} label={delta.label} tone={delta.tone} />
         </div>
       )}
-    </Card>
+    </>
   );
+  if (flat) {
+    return <div className={cn(styles.root, styles.flat, className)}>{content}</div>;
+  }
+  return <Card className={cn(styles.root, className)}>{content}</Card>;
 }

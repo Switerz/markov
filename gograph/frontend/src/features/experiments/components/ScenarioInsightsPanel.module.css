@@ -30,8 +30,10 @@
   font-style: italic;
   color: var(--gg-text-primary);
   line-height: 1.5;
-  padding-left: 10px;
-  border-left: 3px solid var(--gg-blue);
+  padding: var(--gg-space-2) var(--gg-space-3);
+  background: var(--gg-surface-soft);
+  border-radius: var(--gg-radius-control);
+  max-width: 75ch;
 }
 
 .list {
@@ -88,6 +90,7 @@
   font-size: 12px;
   color: var(--gg-text-secondary);
   line-height: 1.5;
+  max-width: 65ch;
 }
 
 .chips {
@@ -101,7 +104,7 @@
   align-items: center;
   padding: 4px 10px;
   border-radius: var(--gg-radius-pill);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   border: 1px solid var(--gg-border);
   background: var(--gg-surface);

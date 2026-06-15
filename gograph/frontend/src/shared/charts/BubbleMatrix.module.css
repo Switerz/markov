@@ -28,13 +28,13 @@
 }
 
 .label {
-  font-size: 11px;
+  font-size: 12px;
   fill: var(--gg-text-primary);
   pointer-events: none;
 }
 
 .axisTick {
-  font-size: 11px;
+  font-size: 12px;
   fill: var(--gg-text-secondary);
 }
 
@@ -51,7 +51,7 @@
 }
 
 .quadrantDescription {
-  font-size: 11px;
+  font-size: 12px;
   fill: var(--gg-text-secondary);
 }
 
@@ -61,6 +61,6 @@
 }
 
 .legend {
-  font-size: 11px;
+  font-size: 12px;
   fill: var(--gg-text-secondary);
 }
