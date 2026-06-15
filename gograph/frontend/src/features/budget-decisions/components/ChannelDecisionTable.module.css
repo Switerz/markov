@@ -1,0 +1,82 @@
+.root {
+  width: 100%;
+}
+
+.body {
+  padding-block: var(--gg-space-3);
+}
+
+.channel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.channelIcon {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--gg-surface-soft);
+  border: 1px solid var(--gg-border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gg-text-secondary);
+}
+
+.channelName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gg-text-primary);
+}
+
+.valueStack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.valueMain {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gg-text-primary);
+}
+
+.consensusCell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 80px;
+}
+
+.consensusValue {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gg-text-primary);
+}
+
+.role {
+  font-size: 12px;
+  color: var(--gg-text-secondary);
+}
+
+.presence {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+}
+
+.presenceDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.pagination {
+  font-size: 12px;
+  color: var(--gg-text-secondary);
+}
