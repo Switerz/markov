@@ -1,0 +1,15 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--gg-space-4);
+}
+
+.valueWithBadge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--gg-space-2);
+}
+
+.badge {
+  align-self: center;
+}
