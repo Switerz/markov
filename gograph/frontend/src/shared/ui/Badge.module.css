@@ -1,0 +1,40 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--gg-radius-pill);
+  font-weight: 500;
+  font-size: 12px;
+  padding: 2px 10px;
+  border: 1px solid transparent;
+}
+.sm { font-size: 11px; padding: 1px 8px; }
+.md { font-size: 12px; padding: 2px 10px; }
+
+/* SOFT (default) — token-soft bg + token color */
+.variant_soft.tone_blue    { background: var(--gg-blue-soft);    color: var(--gg-blue); }
+.variant_soft.tone_green   { background: var(--gg-green-soft);   color: var(--gg-green); }
+.variant_soft.tone_red     { background: var(--gg-red-soft);     color: var(--gg-red); }
+.variant_soft.tone_orange  { background: var(--gg-orange-soft);  color: var(--gg-orange); }
+.variant_soft.tone_indigo  { background: var(--gg-indigo-soft);  color: var(--gg-indigo); }
+.variant_soft.tone_cyan    { background: var(--gg-cyan-soft);    color: var(--gg-cyan); }
+.variant_soft.tone_neutral { background: var(--gg-neutral-soft); color: var(--gg-text-secondary); }
+
+/* SOLID */
+.variant_solid.tone_blue    { background: var(--gg-blue);    color: #fff; }
+.variant_solid.tone_green   { background: var(--gg-green);   color: #fff; }
+.variant_solid.tone_red     { background: var(--gg-red);     color: #fff; }
+.variant_solid.tone_orange  { background: var(--gg-orange);  color: #fff; }
+.variant_solid.tone_indigo  { background: var(--gg-indigo);  color: #fff; }
+.variant_solid.tone_cyan    { background: var(--gg-cyan);    color: #fff; }
+.variant_solid.tone_neutral { background: var(--gg-text-secondary); color: #fff; }
+
+/* OUTLINE */
+.variant_outline { background: transparent; }
+.variant_outline.tone_blue    { color: var(--gg-blue);    border-color: var(--gg-blue); }
+.variant_outline.tone_green   { color: var(--gg-green);   border-color: var(--gg-green); }
+.variant_outline.tone_red     { color: var(--gg-red);     border-color: var(--gg-red); }
+.variant_outline.tone_orange  { color: var(--gg-orange);  border-color: var(--gg-orange); }
+.variant_outline.tone_indigo  { color: var(--gg-indigo);  border-color: var(--gg-indigo); }
+.variant_outline.tone_cyan    { color: var(--gg-cyan);    border-color: var(--gg-cyan); }
+.variant_outline.tone_neutral { color: var(--gg-text-secondary); border-color: var(--gg-border-strong); }
