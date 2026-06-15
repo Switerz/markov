@@ -6,7 +6,7 @@ import * as Popover from "@radix-ui/react-popover";
 import { Plus, X, Play, RotateCcw } from "lucide-react";
 import { Card, Button, Select } from "../../../shared/ui";
 import { channelIcon } from "../../../shared/icons/channelIcons";
-import { useScenarioSimulation } from "../hooks/useScenarioSimulation";
+import { useScenarioSimulation } from "../../../shared/hooks/useScenarioSimulation";
 import type { JourneyBuilder as JourneyBuilderData, BuilderStep } from "../types";
 import styles from "./JourneyBuilder.module.css";
 
