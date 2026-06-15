@@ -1,0 +1,18 @@
+.root {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--gg-radius-card);
+  flex-shrink: 0;
+}
+.sm { width: 28px; height: 28px; }
+.md { width: 36px; height: 36px; }
+.lg { width: 44px; height: 44px; }
+
+.tone_blue    { background: var(--gg-blue-soft);    color: var(--gg-blue); }
+.tone_green   { background: var(--gg-green-soft);   color: var(--gg-green); }
+.tone_red     { background: var(--gg-red-soft);     color: var(--gg-red); }
+.tone_orange  { background: var(--gg-orange-soft);  color: var(--gg-orange); }
+.tone_indigo  { background: var(--gg-indigo-soft);  color: var(--gg-indigo); }
+.tone_cyan    { background: var(--gg-cyan-soft);    color: var(--gg-cyan); }
+.tone_neutral { background: var(--gg-neutral-soft); color: var(--gg-text-secondary); }
