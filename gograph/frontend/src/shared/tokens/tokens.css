@@ -89,6 +89,7 @@ html, body {
   color: var(--gg-text-primary);
   background: var(--gg-bg);
   line-height: 1.45;
+  overflow-x: hidden;
 }
 h1, h2, h3, h4, h5, h6 { font-family: var(--gg-font-display); }
 button, input, select, textarea { font-family: inherit; }

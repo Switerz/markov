@@ -4,6 +4,7 @@
   border-radius: var(--gg-radius-card);
   box-shadow: var(--gg-shadow-soft);
   overflow: hidden;
+  min-width: 0;
 }
 .header {
   padding: var(--gg-space-3) var(--gg-space-4) 0;

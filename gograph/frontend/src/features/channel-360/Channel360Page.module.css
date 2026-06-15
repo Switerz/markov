@@ -3,12 +3,15 @@
   max-width: 1600px;
   margin: 0 auto;
   width: 100%;
+  min-width: 0;
 }
 .grid {
   display: grid;
   grid-template-columns: 9fr 3fr;
   gap: var(--gg-space-5);
+  min-width: 0;
 }
+.grid > * { min-width: 0; }
 .left,
 .right {
   display: flex;
@@ -20,7 +23,9 @@
   display: grid;
   grid-template-columns: 1.4fr 1fr;
   gap: var(--gg-space-5);
+  min-width: 0;
 }
+.row2 > * { min-width: 0; }
 @media (max-width: 1080px) {
   .grid { grid-template-columns: 1fr; }
   .row2 { grid-template-columns: 1fr; }

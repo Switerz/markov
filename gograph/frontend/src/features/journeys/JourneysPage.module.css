@@ -6,13 +6,16 @@
   max-width: 1600px;
   margin: 0 auto;
   width: 100%;
+  min-width: 0;
 }
 
 .flowGrid {
   display: grid;
   grid-template-columns: 1.5fr 1fr;
   gap: var(--gg-space-5);
+  min-width: 0;
 }
+.flowGrid > * { min-width: 0; }
 
 @media (max-width: 1080px) {
   .flowGrid { grid-template-columns: 1fr; }
@@ -22,7 +25,9 @@
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: var(--gg-space-5);
+  min-width: 0;
 }
+.bottomGrid > * { min-width: 0; }
 
 @media (max-width: 1080px) {
   .bottomGrid { grid-template-columns: 1fr; }

@@ -6,6 +6,8 @@
   border: 1px solid var(--gg-border);
   border-radius: var(--gg-radius-card);
   background: var(--gg-surface);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .table {
