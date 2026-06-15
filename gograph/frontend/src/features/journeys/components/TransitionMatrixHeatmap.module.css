@@ -1,0 +1,25 @@
+.headerRight {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gg-space-2);
+  margin-left: auto;
+}
+
+.headerWrap {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gg-space-3);
+  width: 100%;
+}
+
+.headerText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.footerAction {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+}
