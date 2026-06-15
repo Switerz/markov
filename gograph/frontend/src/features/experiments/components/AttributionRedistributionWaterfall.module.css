@@ -1,0 +1,33 @@
+.headerRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--gg-space-3);
+  width: 100%;
+}
+
+.titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.controlChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--gg-text-secondary);
+  background: var(--gg-surface-soft);
+  border: 1px solid var(--gg-border);
+  border-radius: var(--gg-radius-pill);
+}
+
+.note {
+  margin: 0;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--gg-text-secondary);
+}
