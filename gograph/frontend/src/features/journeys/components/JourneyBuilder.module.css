@@ -1,0 +1,143 @@
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gg-space-4);
+}
+
+.pathRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--gg-space-2);
+  padding: var(--gg-space-3);
+  background: var(--gg-surface-soft);
+  border: 1px dashed var(--gg-border);
+  border-radius: var(--gg-radius-card);
+  min-height: 56px;
+}
+
+.stepChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 10px;
+  background: var(--gg-surface);
+  border: 1px solid var(--gg-border);
+  border-radius: var(--gg-radius-pill);
+  font-size: 13px;
+  color: var(--gg-text-primary);
+}
+
+.stepChipTone_green {
+  background: color-mix(in srgb, var(--gg-green) 12%, transparent);
+  border-color: var(--gg-green);
+}
+
+.stepRemove {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--gg-text-secondary);
+  display: inline-flex;
+}
+.stepRemove:hover { color: var(--gg-text-primary); }
+
+.arrow {
+  color: var(--gg-text-secondary);
+  font-size: 14px;
+  display: inline-flex;
+}
+
+.popover {
+  background: var(--gg-surface);
+  border: 1px solid var(--gg-border);
+  border-radius: var(--gg-radius-card);
+  padding: var(--gg-space-3);
+  box-shadow: var(--gg-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gg-space-2);
+  z-index: 50;
+}
+
+.quickRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gg-space-2);
+  font-size: 12px;
+  color: var(--gg-text-secondary);
+}
+
+.quickChip {
+  appearance: none;
+  background: var(--gg-surface);
+  border: 1px solid var(--gg-border);
+  border-radius: var(--gg-radius-pill);
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--gg-text-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.quickChip:hover { border-color: var(--gg-blue); color: var(--gg-blue); }
+
+.interpretation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gg-space-2);
+}
+
+.interpretationGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--gg-space-3);
+}
+
+@media (max-width: 720px) {
+  .interpretationGrid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.metricTile {
+  background: var(--gg-surface-soft);
+  border: 1px solid var(--gg-border);
+  border-radius: var(--gg-radius-card);
+  padding: var(--gg-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metricTitle {
+  font-size: 11px;
+  color: var(--gg-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.metricValue {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--gg-text-primary);
+}
+
+.metricSubtitle {
+  font-size: 11px;
+  color: var(--gg-text-secondary);
+}
+
+.footerActions {
+  display: flex;
+  gap: var(--gg-space-2);
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.errorText {
+  color: var(--gg-red);
+  font-size: 12px;
+}
