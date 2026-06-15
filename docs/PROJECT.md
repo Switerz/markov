@@ -160,19 +160,53 @@ E `/sandbox/*` para criar, comparar e remover cenários simulados.
 
 ## 6. Frontend
 
-`gograph/frontend/` — SPA React/Vite. Visualizações:
+`gograph/frontend/` — SPA React 19 + Vite 7 + TypeScript estrito. Arquitetura modular por feature, design-system compartilhado e tokens visuais centrais.
 
-- **Overview** — KPIs (revenue, spend, conv rate observada vs modelada, runtime).
-- **Channels** — tabela Markov vs Shapley vs ROAS + barchart comparativo (`recharts`).
-- **Diagnostics** — heatmap de presença + role classification.
-- **Graph** — grafo de transição interativo (`@xyflow/react`) com nodes = canais, edges = probabilidades.
-- **Paths** — jornadas top com receita.
-- **Loops** — auto-transições e ciclos.
-- **Funnel** — atribuição segmentada por estágio de funil.
-- **Data Quality** — checks com severidade.
-- **Sandbox** — criar cenário "remover canal X", comparar com baseline, ver delta de atribuição.
+### Stack
+- React Router v6 (BrowserRouter via `createBrowserRouter`)
+- @tanstack/react-query 5 (server state)
+- @tanstack/react-table 8 (tabelas)
+- @radix-ui/react-* (dialog, tabs, select, slider, switch, tooltip, popover, dropdown-menu)
+- react-hook-form + zod (formulários)
+- recharts + @nivo/sankey + @xyflow/react (gráficos e grafo)
+- lucide-react (ícones)
+- Vitest + Testing Library (testes)
 
-API client em `src/api.ts` (base `VITE_API_BASE ?? http://127.0.0.1:8000`).
+### Estrutura
+
+```
+src/
+├── app/         AppShell, Sidebar, TopBar, routes.tsx, Providers
+├── shared/      ui/ (primitivos), charts/, format/, hooks/, icons/, tokens/
+├── features/    overview/, budget-decisions/, channel-360/, journeys/, experiments/, executions-quality/
+├── lib/         api.ts (HTTP client tipado)
+└── test/        setup.ts (polyfills jsdom para Radix)
+```
+
+Cada feature segue o mesmo formato: `<Feature>Page.tsx`, `types.ts`, `<feature>.mock.ts`, `hooks/use<Feature>Data.ts`, e `components/` para as seções da tela.
+
+### Telas
+
+| Rota | Feature | Descrição |
+|---|---|---|
+| `/` | `overview` | KPIs, decisões prioritárias, consenso de modelos, resumo de jornada, confiança da análise |
+| `/decisoes-de-budget` | `budget-decisions` | Matriz de alocação (bubble chart), tabela de canais, drawer detalhado por canal |
+| `/decisoes-de-budget/canais/:slug` | `channel-360` | Métricas + atribuição + papel na jornada + sequências + evolução temporal de um canal específico |
+| `/jornadas` | `journeys` | Sankey de fluxo, grafo (xyflow), builder de jornada, top paths, matriz de transição, loops |
+| `/experimentos` | `experiments` | Construtor de cenários, baseline vs cenário, waterfall de redistribuição, insights, comparação |
+| `/execucoes-e-qualidade` | `executions-quality` | Histórico de execuções, Trust Center, comparação entre execuções, painel de detalhes |
+
+### Tokens
+
+Definidos em `src/shared/tokens/tokens.css` e re-exportados como `Tone` em `tokens.ts`. Paleta: `blue / green / red / orange / indigo / cyan / neutral` (sem purple — substituído por indigo após auditoria do impeccable). Tipografia: Geist (display) + Inter (body). Contraste de texto secundário ajustado para WCAG AA.
+
+### Convenções
+
+1. Componentes em `shared/` não conhecem domínio — recebem `data` + `config` via props.
+2. Nenhum cross-feature import — helpers compartilhados sobem para `shared/`.
+3. Mocks por tela em `<feature>/<feature>.mock.ts` espelhando o JSON do contrato em `docs/gograph-refactor-instrucoes/`. Marcados com `TODO(api):` onde o endpoint ainda não cobre.
+4. Convenção de query keys do React Query documentada no fim de `lib/api.ts`.
+5. Detalhes adicionais em [`gograph/frontend/README.md`](../gograph/frontend/README.md).
 
 ## 7. Recomendações geradas
 
