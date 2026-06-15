@@ -10,6 +10,9 @@ import styles from "./ExecutionDetailsPanel.module.css";
 
 export type ExecutionDetailsPanelProps = {
   panel: ExecutionDetailsPanelData;
+  onReexecute?: () => void;
+  onClose?: () => void;
+  onMoreActions?: () => void;
 };
 
 const statusTone: Record<string, Tone> = {
@@ -19,7 +22,12 @@ const statusTone: Record<string, Tone> = {
   Erro: "red",
 };
 
-export function ExecutionDetailsPanel({ panel }: ExecutionDetailsPanelProps) {
+export function ExecutionDetailsPanel({
+  panel,
+  onReexecute,
+  onClose,
+  onMoreActions,
+}: ExecutionDetailsPanelProps) {
   return (
     <Card>
       <Card.Header>
@@ -39,7 +47,12 @@ export function ExecutionDetailsPanel({ panel }: ExecutionDetailsPanelProps) {
               </span>
             </div>
           </div>
-          <Button variant="icon" size="sm" aria-label="Fechar painel">
+          <Button
+            variant="icon"
+            size="sm"
+            aria-label="Fechar painel"
+            onClick={onClose}
+          >
             <X size={14} />
           </Button>
         </div>
@@ -110,10 +123,19 @@ export function ExecutionDetailsPanel({ panel }: ExecutionDetailsPanelProps) {
       </Card.Body>
       <Card.Footer>
         <div className={styles.footerRow}>
-          <Button variant="secondary" iconLeft={<RefreshCw size={14} />}>
+          <Button
+            variant="secondary"
+            iconLeft={<RefreshCw size={14} />}
+            onClick={onReexecute}
+          >
             Reexecutar
           </Button>
-          <Button variant="icon" size="sm" aria-label="Mais ações">
+          <Button
+            variant="icon"
+            size="sm"
+            aria-label="Mais ações"
+            onClick={onMoreActions}
+          >
             <EllipsisVertical size={14} />
           </Button>
         </div>

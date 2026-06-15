@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { TopBar } from "../../app/TopBar";
-import { Button } from "../../shared/ui";
+import { Button, useToast } from "../../shared/ui";
 import { Plus, Settings, Download } from "lucide-react";
+import { NewRunDialog } from "../../app/dialogs/NewRunDialog";
 import { ExecutionSummaryCards } from "./components/ExecutionSummaryCards";
 import { ExecutionHistoryTable } from "./components/ExecutionHistoryTable";
 import { TrustCenterPanel } from "./components/TrustCenterPanel";
@@ -18,6 +19,9 @@ export function ExecutionsQualityPage() {
   // TODO(api): when api.getOverview(selectedId) is wired, swap the panel data
   // by selected id. Today the right panel always shows the mocked execution.
   const [selectedId, setSelectedId] = useState<string | undefined>(defaultSelected);
+  const [newRunOpen, setNewRunOpen] = useState(false);
+  const [reexecOpen, setReexecOpen] = useState(false);
+  const toast = useToast();
   return (
     <>
       <TopBar
@@ -25,18 +29,34 @@ export function ExecutionsQualityPage() {
         subtitle={data.screen.subtitle}
         actions={
           <>
-            <Button variant="primary" iconLeft={<Plus size={16} />}>
+            <Button
+              variant="primary"
+              iconLeft={<Plus size={16} />}
+              onClick={() => setNewRunOpen(true)}
+            >
               Nova execução
             </Button>
-            <Button variant="secondary" iconLeft={<Settings size={16} />}>
+            <Button
+              variant="secondary"
+              iconLeft={<Settings size={16} />}
+              onClick={() =>
+                toast.push("Parâmetros do modelo — em breve", "blue")
+              }
+            >
               Parâmetros do modelo
             </Button>
-            <Button variant="secondary" iconLeft={<Download size={16} />}>
+            <Button
+              variant="secondary"
+              iconLeft={<Download size={16} />}
+              onClick={() => toast.push("Exportação em preparação", "blue")}
+            >
               Exportar
             </Button>
           </>
         }
       />
+      <NewRunDialog open={newRunOpen} onOpenChange={setNewRunOpen} />
+      <NewRunDialog open={reexecOpen} onOpenChange={setReexecOpen} />
       <div className={styles.page}>
         <ExecutionSummaryCards metrics={data.summaryMetrics} />
         <div className={styles.grid}>
@@ -52,7 +72,14 @@ export function ExecutionsQualityPage() {
             </div>
           </section>
           <aside className={styles.right}>
-            <ExecutionDetailsPanel panel={data.executionDetailsPanel} />
+            <ExecutionDetailsPanel
+              panel={data.executionDetailsPanel}
+              onReexecute={() => setReexecOpen(true)}
+              onClose={() => setSelectedId(undefined)}
+              onMoreActions={() =>
+                toast.push("Mais ações — em breve", "blue")
+              }
+            />
           </aside>
         </div>
       </div>

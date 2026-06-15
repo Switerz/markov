@@ -1,15 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { TooltipProvider } from "../../shared/ui";
+import { Providers } from "../../app/Providers";
 import { ExecutionsQualityPage } from "./ExecutionsQualityPage";
 
 const renderPage = () =>
   render(
     <MemoryRouter>
-      <TooltipProvider>
+      <Providers>
         <ExecutionsQualityPage />
-      </TooltipProvider>
+      </Providers>
     </MemoryRouter>,
   );
 
