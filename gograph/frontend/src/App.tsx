@@ -36,7 +36,7 @@ import {
   PathRow,
   SequentialEffectRow,
   TouchpointRow,
-} from "./api";
+} from "./lib/api";
 import { SandboxView } from "./SandboxView";
 
 type Tab =

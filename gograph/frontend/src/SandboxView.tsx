@@ -19,7 +19,7 @@ import {
   type ScenarioAnalysis,
   type ScenarioCompareItem,
   type ScenarioCompareResponse,
-} from "./api";
+} from "./lib/api";
 
 const KNOWN_CHANNELS = [
   "Paid Meta Ads",
