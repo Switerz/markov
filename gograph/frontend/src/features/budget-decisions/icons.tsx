@@ -6,16 +6,18 @@ import {
   Plus,
   Download,
   TrendingUp,
-  DollarSign,
-  ShieldCheck,
-  Filter,
-  ChartNoAxesCombined,
-  TriangleAlert,
+  Shield,
+  Search,
+  CornerDownRight,
+  SlidersHorizontal,
+  ChevronRight,
   type LucideIcon,
 } from "lucide-react";
 
-// Map JSON icon name → lucide component for filter/metric/action icons.
-// Unknown names return null so the caller can render nothing.
+// Local lucide name → component map for the icons referenced by the
+// budget-decisions contract JSON (summary cards, filters, actions,
+// table controls). Returns null for unknown names so the caller can
+// safely render nothing.
 const lucideByName: Record<string, LucideIcon> = {
   Building2,
   Calendar,
@@ -23,11 +25,11 @@ const lucideByName: Record<string, LucideIcon> = {
   Plus,
   Download,
   TrendingUp,
-  DollarSign,
-  ShieldCheck,
-  Filter,
-  ChartNoAxesCombined,
-  TriangleAlert,
+  Shield,
+  Search,
+  CornerDownRight,
+  SlidersHorizontal,
+  ChevronRight,
 };
 
 export function lucideIcon(name: string, size = 16): ReactNode {
