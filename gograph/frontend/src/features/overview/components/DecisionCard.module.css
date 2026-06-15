@@ -1,0 +1,90 @@
+.root {
+  flex-shrink: 0;
+  min-width: 260px;
+  width: 260px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gg-space-3);
+  padding: var(--gg-space-4);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--gg-space-2);
+  justify-content: space-between;
+}
+
+.channel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gg-space-2);
+  min-width: 0;
+}
+
+.channelIcon {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--gg-surface-soft);
+  border: 1px solid var(--gg-border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gg-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.channelName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gg-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--gg-space-2);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.statLabel {
+  font-size: 11px;
+  color: var(--gg-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.statValue {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gg-text-primary);
+}
+
+.description {
+  font-size: 12px;
+  color: var(--gg-text-secondary);
+  line-height: 1.5;
+}
+
+.actions {
+  display: flex;
+  gap: var(--gg-space-2);
+  margin-top: auto;
+}
+
+.actions > button {
+  flex: 1;
+  justify-content: center;
+}
