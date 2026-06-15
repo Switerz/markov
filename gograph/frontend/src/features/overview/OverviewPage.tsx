@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Download, Plus } from "lucide-react";
 import { TopBar } from "../../app/TopBar";
 import { Button, useToast } from "../../shared/ui";
+import { downloadCsv, todayIso } from "../../shared/format";
 import { NewRunDialog } from "../../app/dialogs/NewRunDialog";
 import { OverviewHeaderFilters } from "./components/OverviewHeaderFilters";
 import { MetricCardGrid } from "./components/MetricCardGrid";
@@ -43,7 +44,20 @@ export function OverviewPage() {
             <Button
               variant="secondary"
               iconLeft={<Download size={16} />}
-              onClick={() => toast.push("Exportação em preparação", "blue")}
+              onClick={() => {
+                // Export the priority decisions table (most actionable summary
+                // for the overview screen).
+                const rows = data.priorityDecisions.cards.map((c) => ({
+                  channel: c.channel,
+                  recommendation: c.recommendation,
+                  share_spend: c.shareSpend,
+                  share_revenue: c.shareRevenue,
+                  roas: c.roas,
+                  description: c.description,
+                }));
+                downloadCsv(`overview-canais-${todayIso()}.csv`, rows);
+                toast.push("Exportação iniciada", "green");
+              }}
             >
               Exportar
             </Button>

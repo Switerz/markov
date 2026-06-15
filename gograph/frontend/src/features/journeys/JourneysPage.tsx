@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Plus, Download } from "lucide-react";
 import { TopBar } from "../../app/TopBar";
 import { Button, Tabs, useToast } from "../../shared/ui";
+import { downloadCsv, todayIso } from "../../shared/format";
 import { NewRunDialog } from "../../app/dialogs/NewRunDialog";
 import { JourneyFilters } from "./components/JourneyFilters";
 import { JourneyViewTabs } from "./components/JourneyViewTabs";
@@ -45,7 +46,20 @@ export function JourneysPage() {
             <Button
               variant="secondary"
               iconLeft={<Download size={16} />}
-              onClick={() => toast.push("Exportação em preparação", "blue")}
+              onClick={() => {
+                const rows = data.topPaths.rows.map((r) => ({
+                  rank: r.rank,
+                  path: r.path,
+                  participation: r.participation,
+                  delta: r.delta,
+                  revenue: r.revenue,
+                  conversions: r.conversions,
+                  ticket: r.ticket,
+                  time_to_conversion: r.timeToConversion,
+                }));
+                downloadCsv(`top-caminhos-${todayIso()}.csv`, rows);
+                toast.push("Exportação iniciada", "green");
+              }}
             >
               Exportar
             </Button>

@@ -1,8 +1,11 @@
 import { useState } from "react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { TopBar } from "../../app/TopBar";
 import { Button, useToast } from "../../shared/ui";
-import { Plus, Settings, Download } from "lucide-react";
+import { Plus, Settings, Download, EllipsisVertical } from "lucide-react";
 import { NewRunDialog } from "../../app/dialogs/NewRunDialog";
+import { downloadCsv, todayIso } from "../../shared/format";
+import type { ModelRunCreatePayload } from "../../lib/api";
 import { ExecutionSummaryCards } from "./components/ExecutionSummaryCards";
 import { ExecutionHistoryTable } from "./components/ExecutionHistoryTable";
 import { TrustCenterPanel } from "./components/TrustCenterPanel";
@@ -48,7 +51,22 @@ export function ExecutionsQualityPage() {
             <Button
               variant="secondary"
               iconLeft={<Download size={16} />}
-              onClick={() => toast.push("Exportação em preparação", "blue")}
+              onClick={() => {
+                const rows = data.executionHistory.rows.map((r) => ({
+                  id: r.id,
+                  period: r.period,
+                  status: r.status,
+                  revenue: r.revenue,
+                  observed_conversion: r.observedConversion,
+                  modeled_conversion: r.modeledConversion,
+                  confidence: r.confidence,
+                  runtime: r.runtime,
+                  created_by: r.createdBy,
+                  created_at: r.createdAt,
+                }));
+                downloadCsv(`execucoes-${todayIso()}.csv`, rows);
+                toast.push("Exportação iniciada", "green");
+              }}
             >
               Exportar
             </Button>

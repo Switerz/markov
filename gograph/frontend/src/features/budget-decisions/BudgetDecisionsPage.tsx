@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Download, Plus } from "lucide-react";
 import { TopBar } from "../../app/TopBar";
 import { Button, useToast } from "../../shared/ui";
+import { downloadCsv, todayIso } from "../../shared/format";
 import { NewRunDialog } from "../../app/dialogs/NewRunDialog";
 import { useBudgetDecisionsData } from "./hooks/useBudgetDecisionsData";
 import { BudgetDecisionFilters } from "./components/BudgetDecisionFilters";
@@ -48,7 +49,26 @@ export function BudgetDecisionsPage() {
             <Button
               variant="secondary"
               iconLeft={<Download size={16} />}
-              onClick={() => toast.push("Exportação em preparação", "blue")}
+              onClick={() => {
+                const rows = data.channelsTable.rows.map((r) => ({
+                  channel: r.channel,
+                  recommendation: r.recommendation,
+                  spend: r.spend,
+                  spend_delta: r.spendDelta,
+                  revenue: r.revenue,
+                  revenue_delta: r.revenueDelta,
+                  roas_markov: r.roasMarkov,
+                  roas_shapley: r.roasShapley,
+                  consensus: r.consensus,
+                  role: r.role,
+                  presence: r.presence,
+                }));
+                downloadCsv(
+                  `decisoes-de-budget-${todayIso()}.csv`,
+                  rows,
+                );
+                toast.push("Exportação iniciada", "green");
+              }}
             >
               Exportar
             </Button>
