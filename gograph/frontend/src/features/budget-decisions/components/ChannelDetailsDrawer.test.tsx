@@ -1,21 +1,21 @@
 import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { TooltipProvider } from "../../../shared/ui";
+import { Providers } from "../../../app/Providers";
 import { ChannelDetailsDrawer } from "./ChannelDetailsDrawer";
 import { budgetDecisionsMock } from "../budget-decisions.mock";
 
 const renderDrawer = () =>
   render(
-    <MemoryRouter>
-      <TooltipProvider>
+    <Providers>
+      <MemoryRouter>
         <ChannelDetailsDrawer
           open
           onOpenChange={() => {}}
           drawer={budgetDecisionsMock.selectedChannelDrawer}
         />
-      </TooltipProvider>
-    </MemoryRouter>,
+      </MemoryRouter>
+    </Providers>,
   );
 
 describe("ChannelDetailsDrawer", () => {

@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Drawer,
   Badge,
@@ -6,6 +6,7 @@ import {
   MetricCard,
   Tabs,
   StatDelta,
+  useToast,
   type StatTone,
 } from "../../../shared/ui";
 import {
@@ -52,6 +53,8 @@ function ChannelHeaderTitle({
 
 function ResumoTab({ drawer }: { drawer: SelectedChannelDrawer }) {
   const slug = slugify(drawer.channel);
+  const toast = useToast();
+  const navigate = useNavigate();
   return (
     <div className={styles.tabBody}>
       <div className={styles.metrics}>
@@ -148,7 +151,22 @@ function ResumoTab({ drawer }: { drawer: SelectedChannelDrawer }) {
         >
           Ver canal 360
         </Link>
-        <Button variant="secondary" size="sm" type="button">
+        <Button
+          variant="ghost"
+          size="sm"
+          type="button"
+          onClick={() => navigate("/experimentos")}
+        >
+          Ir para Experimentos
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          type="button"
+          onClick={() =>
+            toast.push("Em breve — abrir tela de cenários", "blue")
+          }
+        >
           Criar cenário
         </Button>
       </footer>
