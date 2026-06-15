@@ -1,0 +1,78 @@
+.scenarioCell {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.scenarioText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.scenarioName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gg-text-primary);
+}
+
+.scenarioDesc {
+  font-size: 11px;
+  color: var(--gg-text-secondary);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: currentColor;
+  display: inline-block;
+}
+
+.valueCell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.value {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--gg-text-primary);
+}
+
+.menu {
+  background: var(--gg-surface);
+  border: 1px solid var(--gg-border);
+  border-radius: var(--gg-radius-control);
+  padding: 4px;
+  box-shadow: var(--gg-shadow);
+  min-width: 160px;
+}
+
+.menuItem {
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--gg-text-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  outline: 0;
+}
+
+.menuItem:hover,
+.menuItem[data-highlighted] {
+  background: var(--gg-surface-soft);
+}
+
+.allLink {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gg-blue);
+  text-decoration: none;
+}
+
+.allLink:hover {
+  text-decoration: underline;
+}
