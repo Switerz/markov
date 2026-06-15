@@ -14,7 +14,7 @@ import {
 } from "../../../shared/icons/channelIcons";
 import { TrendingUp } from "lucide-react";
 import type { SelectedChannelDrawer } from "../types";
-import { slugify } from "../slug";
+import { slugify } from "../../../shared/format/slug";
 import { RecommendedActionSimulator } from "./RecommendedActionSimulator";
 import styles from "./ChannelDetailsDrawer.module.css";
 
