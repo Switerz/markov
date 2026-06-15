@@ -1,0 +1,28 @@
+.page {
+  padding: var(--gg-space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gg-space-6);
+  max-width: 1600px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.twoCol {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: var(--gg-space-5);
+}
+
+@media (max-width: 1080px) {
+  .twoCol { grid-template-columns: 1fr; }
+}
+
+.footerNote {
+  margin: 0;
+  font-size: 12px;
+  color: var(--gg-text-secondary);
+  text-align: center;
+  padding-top: var(--gg-space-4);
+  border-top: 1px solid var(--gg-border);
+}
