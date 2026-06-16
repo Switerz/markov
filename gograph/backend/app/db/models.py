@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from gograph.backend.app.db.base import Base
@@ -69,6 +69,67 @@ class ModelRun(Base):
         back_populates="model_run",
         cascade="all, delete-orphan",
     )
+    summary: Mapped["ModelRunSummary | None"] = relationship(
+        back_populates="model_run",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    channel_recommendations: Mapped[list["ChannelRecommendation"]] = relationship(
+        back_populates="model_run",
+        cascade="all, delete-orphan",
+    )
+
+
+class ModelRunSummary(Base):
+    __tablename__ = "model_run_summary"
+
+    model_run_id: Mapped[int] = mapped_column(
+        ForeignKey("model_runs.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    observed_conversion_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    model_conversion_rate: Mapped[float] = mapped_column(Float)
+    total_revenue: Mapped[float] = mapped_column(Float)
+    total_spend: Mapped[float] = mapped_column(Float)
+    total_conversions: Mapped[int] = mapped_column(Integer)
+    total_nonconversions_sampled: Mapped[int] = mapped_column(Integer)
+    non_conv_scale: Mapped[float | None] = mapped_column(Float, nullable=True)
+    state_count: Mapped[int] = mapped_column(Integer)
+    channel_count: Mapped[int] = mapped_column(Integer)
+    path_count: Mapped[int] = mapped_column(Integer)
+    transition_count: Mapped[int] = mapped_column(Integer)
+    confidence_score: Mapped[float] = mapped_column(Float)
+    confidence_label: Mapped[str] = mapped_column(String(32))
+
+    model_run: Mapped["ModelRun"] = relationship(back_populates="summary")
+
+
+class ChannelRecommendation(Base):
+    __tablename__ = "channel_recommendations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    model_run_id: Mapped[int] = mapped_column(
+        ForeignKey("model_runs.id", ondelete="CASCADE"),
+        index=True,
+    )
+    channel: Mapped[str] = mapped_column(String(255), index=True)
+    recommendation: Mapped[str] = mapped_column(String(32))
+    recommendation_tone: Mapped[str] = mapped_column(String(32))
+    priority_rank: Mapped[int] = mapped_column(Integer)
+    rationale_json: Mapped[str] = mapped_column(Text)
+    risks_json: Mapped[str] = mapped_column(Text)
+    best_practices_json: Mapped[str] = mapped_column(Text)
+    suggested_budget_delta_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    suggested_budget_delta_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    estimated_revenue_delta: Mapped[float | None] = mapped_column(Float, nullable=True)
+    estimated_roas_min: Mapped[float | None] = mapped_column(Float, nullable=True)
+    estimated_roas_max: Mapped[float | None] = mapped_column(Float, nullable=True)
+    saturation_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    confidence_score: Mapped[float] = mapped_column(Float)
+
+    model_run: Mapped["ModelRun"] = relationship(back_populates="channel_recommendations")
+
+    __table_args__ = (UniqueConstraint("model_run_id", "channel"),)
 
 
 class TransitionCount(Base):

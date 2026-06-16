@@ -11,6 +11,7 @@ to `None` before validation.
 
 from __future__ import annotations
 
+import json
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
@@ -43,6 +44,76 @@ class ChannelMetricRow(BaseModel):
     pfc_delta_pp: Optional[float] = None
     recommendation: Optional[str] = None
     confidence_score: Optional[float] = None
+
+
+class ModelRunSummaryRow(BaseModel):
+    """Row for `/summary` (model_run_summary)."""
+
+    model_config = _ROW_CONFIG
+
+    observed_conversion_rate: Optional[float] = None
+    model_conversion_rate: float
+    total_revenue: float
+    total_spend: float
+    total_conversions: int
+    total_nonconversions_sampled: int
+    non_conv_scale: Optional[float] = None
+    state_count: int
+    channel_count: int
+    path_count: int
+    transition_count: int
+    confidence_score: float
+    confidence_label: str
+
+
+class ChannelRecommendationRow(BaseModel):
+    """Row for `/recommendations` (channel_recommendations)."""
+
+    model_config = _ROW_CONFIG
+
+    channel: str
+    recommendation: str
+    recommendation_tone: str
+    priority_rank: int
+    rationale: list[str]
+    risks: list[str]
+    best_practices: list[str]
+    suggested_budget_delta_pct: Optional[float] = None
+    suggested_budget_delta_value: Optional[float] = None
+    estimated_revenue_delta: Optional[float] = None
+    estimated_roas_min: Optional[float] = None
+    estimated_roas_max: Optional[float] = None
+    saturation_score: Optional[float] = None
+    confidence_score: float
+
+
+def recommendation_row_from_orm(row: object) -> ChannelRecommendationRow:
+    """Parse JSON text columns from ChannelRecommendation into the public row."""
+
+    def load_list(name: str) -> list[str]:
+        raw = getattr(row, name, "[]")
+        try:
+            value = json.loads(raw or "[]")
+        except json.JSONDecodeError:
+            value = []
+        return [str(item) for item in value] if isinstance(value, list) else []
+
+    return ChannelRecommendationRow(
+        channel=getattr(row, "channel"),
+        recommendation=getattr(row, "recommendation"),
+        recommendation_tone=getattr(row, "recommendation_tone"),
+        priority_rank=getattr(row, "priority_rank"),
+        rationale=load_list("rationale_json"),
+        risks=load_list("risks_json"),
+        best_practices=load_list("best_practices_json"),
+        suggested_budget_delta_pct=getattr(row, "suggested_budget_delta_pct"),
+        suggested_budget_delta_value=getattr(row, "suggested_budget_delta_value"),
+        estimated_revenue_delta=getattr(row, "estimated_revenue_delta"),
+        estimated_roas_min=getattr(row, "estimated_roas_min"),
+        estimated_roas_max=getattr(row, "estimated_roas_max"),
+        saturation_score=getattr(row, "saturation_score"),
+        confidence_score=getattr(row, "confidence_score"),
+    )
 
 
 class DiagnosticRow(BaseModel):
