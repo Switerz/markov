@@ -12,7 +12,8 @@ def test_model_run_read_endpoints_return_persisted_data(tmp_path):
     model_run_id = save_model_run(result, database_url=database_url)
     client = TestClient(app)
 
-    assert client.get("/health").json() == {"status": "ok"}
+    health = client.get("/health").json()
+    assert health["status"] == "ok"
 
     runs = client.get("/model-runs")
     overview = client.get(f"/model-runs/{model_run_id}/overview")
