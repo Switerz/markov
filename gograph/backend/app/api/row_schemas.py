@@ -212,6 +212,36 @@ class DataQualityRow(BaseModel):
     status: Optional[str] = None
     severity: Optional[str] = None
     detail: Optional[str] = None
+    score: Optional[float] = None
+    affected_rows: Optional[int] = None
+    recommendation: Optional[str] = None
+
+
+class ModelRunInputRow(BaseModel):
+    """Row for `/inputs` (model_run_inputs)."""
+
+    model_config = _ROW_CONFIG
+
+    source: str
+    database_id: Optional[int] = None
+    query_name: str
+    row_count: int
+    date_min: Optional[str] = None
+    date_max: Optional[str] = None
+    data_hash: str
+    extracted_at: Optional[str] = None
+
+
+class ModelRunLogRow(BaseModel):
+    """Row for `/logs` (model_run_logs)."""
+
+    model_config = _ROW_CONFIG
+
+    step: str
+    status: str
+    message: Optional[str] = None
+    duration_seconds: Optional[float] = None
+    created_at: Optional[str] = None
 
 
 class LoopDiagnosticRow(BaseModel):

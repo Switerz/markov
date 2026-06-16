@@ -78,6 +78,14 @@ class ModelRun(Base):
         back_populates="model_run",
         cascade="all, delete-orphan",
     )
+    inputs: Mapped[list["ModelRunInput"]] = relationship(
+        back_populates="model_run",
+        cascade="all, delete-orphan",
+    )
+    logs: Mapped[list["ModelRunLog"]] = relationship(
+        back_populates="model_run",
+        cascade="all, delete-orphan",
+    )
 
 
 class ModelRunSummary(Base):
@@ -130,6 +138,43 @@ class ChannelRecommendation(Base):
     model_run: Mapped["ModelRun"] = relationship(back_populates="channel_recommendations")
 
     __table_args__ = (UniqueConstraint("model_run_id", "channel"),)
+
+
+class ModelRunInput(Base):
+    __tablename__ = "model_run_inputs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    model_run_id: Mapped[int] = mapped_column(
+        ForeignKey("model_runs.id", ondelete="CASCADE"),
+        index=True,
+    )
+    source: Mapped[str] = mapped_column(String(64), index=True)
+    database_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    query_name: Mapped[str] = mapped_column(String(255), index=True)
+    row_count: Mapped[int] = mapped_column(Integer)
+    date_min: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    date_max: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    data_hash: Mapped[str] = mapped_column(String(64))
+    extracted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    model_run: Mapped["ModelRun"] = relationship(back_populates="inputs")
+
+
+class ModelRunLog(Base):
+    __tablename__ = "model_run_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    model_run_id: Mapped[int] = mapped_column(
+        ForeignKey("model_runs.id", ondelete="CASCADE"),
+        index=True,
+    )
+    step: Mapped[str] = mapped_column(String(64), index=True)
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    model_run: Mapped["ModelRun"] = relationship(back_populates="logs")
 
 
 class TransitionCount(Base):
@@ -236,6 +281,9 @@ class DataQualityCheck(Base):
     status: Mapped[str] = mapped_column(String(32), index=True)
     severity: Mapped[str] = mapped_column(String(32), index=True)
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    affected_rows: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    recommendation: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     model_run: Mapped[ModelRun] = relationship(back_populates="data_quality_checks")
 
@@ -277,6 +325,8 @@ ModelRun.scenarios = relationship(
 Index("ix_transition_counts_run_type", TransitionCount.model_run_id, TransitionCount.transition_type)
 Index("ix_attribution_results_run_channel", AttributionResult.model_run_id, AttributionResult.channel)
 Index("ix_channel_diagnostics_run_channel", ChannelDiagnostic.model_run_id, ChannelDiagnostic.channel)
+Index("ix_model_run_inputs_run_query", ModelRunInput.model_run_id, ModelRunInput.query_name)
+Index("ix_model_run_logs_run_created", ModelRunLog.model_run_id, ModelRunLog.created_at)
 
 
 # ---------------------------------------------------------------------------

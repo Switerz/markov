@@ -20,6 +20,8 @@ from gograph.backend.app.db.models import (
     ExportRecord,
     FunnelStateAttribution,
     LoopDiagnostic,
+    ModelRunInput,
+    ModelRunLog,
     ModelRun,
     ModelRunSummary,
     PathSummary,
@@ -35,6 +37,7 @@ from gograph.backend.app.db.session import (
 from gograph.backend.app.schemas import ModelRunResult
 from gograph.backend.app.services.recommendation_service import derive_recommendations
 from gograph.backend.app.services.summary_service import compute_summary
+from gograph.backend.app.services.log_service import insert_log
 
 
 def _clean_value(value: Any) -> Any:
@@ -91,7 +94,12 @@ def save_model_run(
     if session is None:
         init_database(database_url)
         with session_scope(database_url=database_url) as scoped_session:
-            return save_model_run(result, model_run_id=model_run_id, session=scoped_session)
+            return save_model_run(
+                result,
+                model_run_id=model_run_id,
+                session=scoped_session,
+                database_url=database_url,
+            )
 
     if model_run_id is None:
         model_run = ModelRun(
@@ -158,11 +166,20 @@ def save_model_run(
         data_quality_rows=result.data_quality,
     )
     save_model_run_summary(session, model_run.id, summary)
-    recs = derive_recommendations(
-        result.roas_results,
-        result.session_quality if result.session_quality is not None else None,
-    )
-    save_channel_recommendations(session, model_run.id, recs)
+    if model_run_id is not None:
+        insert_log(session, model_run.id, "recommendation", "started")
+    try:
+        recs = derive_recommendations(
+            result.roas_results,
+            result.session_quality if result.session_quality is not None else None,
+        )
+        save_channel_recommendations(session, model_run.id, recs)
+        if model_run_id is not None:
+            insert_log(session, model_run.id, "recommendation", "success")
+    except Exception as exc:
+        if model_run_id is not None:
+            insert_log(session, model_run.id, "recommendation", "failed", message=str(exc))
+        raise
 
     return model_run.id
 
@@ -261,6 +278,8 @@ def get_model_run_table(
         "channel_diagnostics": ChannelDiagnostic,
         "path_summary": PathSummary,
         "data_quality_checks": DataQualityCheck,
+        "model_run_inputs": ModelRunInput,
+        "model_run_logs": ModelRunLog,
         "model_run_summary": ModelRunSummary,
         "channel_recommendations": ChannelRecommendation,
         "exports": ExportRecord,
@@ -294,6 +313,8 @@ def clear_database(database_url: str | None = None) -> None:
             DataQualityCheck,
             ModelRunSummary,
             ChannelRecommendation,
+            ModelRunInput,
+            ModelRunLog,
             ExportRecord,
             LoopDiagnostic,
             FunnelStateAttribution,
@@ -473,6 +494,9 @@ def _save_data_quality(
                 status=str(_row_value(row, "status")),
                 severity=str(_row_value(row, "severity")),
                 detail=_row_value(row, "detail"),
+                score=_row_value(row, "score"),
+                affected_rows=_row_value(row, "affected_rows"),
+                recommendation=_row_value(row, "recommendation"),
             )
         )
 
@@ -691,6 +715,8 @@ def _clear_model_run_children(session: Session, model_run_id: int) -> None:
         DataQualityCheck,
         ModelRunSummary,
         ChannelRecommendation,
+        ModelRunInput,
+        ModelRunLog,
         ExportRecord,
         LoopDiagnostic,
         FunnelStateAttribution,

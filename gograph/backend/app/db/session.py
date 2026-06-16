@@ -37,6 +37,9 @@ def _apply_migrations(engine) -> None:
     """Idempotent column additions for schema evolution without Alembic."""
     _add_column_if_missing(engine, "attribution_results", "pfc_weight", "FLOAT")
     _add_column_if_missing(engine, "attribution_results", "pfc_delta_pp", "FLOAT")
+    _add_column_if_missing(engine, "data_quality_checks", "score", "FLOAT")
+    _add_column_if_missing(engine, "data_quality_checks", "affected_rows", "INTEGER")
+    _add_column_if_missing(engine, "data_quality_checks", "recommendation", "TEXT")
 
 
 def _add_column_if_missing(engine, table: str, column: str, col_type: str) -> None:

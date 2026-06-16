@@ -4,6 +4,7 @@ import calendar
 from datetime import date, timedelta
 
 import pandas as pd
+from sqlalchemy.orm import Session
 
 from extract import (
     get_censored_count,
@@ -15,11 +16,21 @@ from extract import (
     get_raw_paths,
 )
 from gograph.backend.app.schemas import ModelRunParams
+from gograph.backend.app.services.lineage_service import record_input_if_possible
 
 
-def extract_transition_counts(params: ModelRunParams) -> tuple[pd.DataFrame, pd.DataFrame]:
+def extract_transition_counts(
+    params: ModelRunParams,
+    *,
+    model_run_id: int | None = None,
+    session: Session | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     if should_batch_transition_extraction(params):
-        return extract_transition_counts_batched(params)
+        return extract_transition_counts_batched(
+            params,
+            model_run_id=model_run_id,
+            session=session,
+        )
 
     converting = get_converting_transitions(
         database_id=params.db_plausible,
@@ -28,6 +39,16 @@ def extract_transition_counts(params: ModelRunParams) -> tuple[pd.DataFrame, pd.
         lookback=params.lookback_days,
         decay_lambda=params.decay_lambda,
     )
+    record_input_if_possible(
+        session,
+        model_run_id=model_run_id,
+        source="plausible",
+        database_id=params.db_plausible,
+        query_name="converting_transitions",
+        df=converting,
+        date_range=(params.start_date, params.end_date),
+        sort_by=["from_ch", "to_ch"],
+    )
     nonconverting = get_nonconverting_transitions(
         database_id=params.db_plausible,
         start_date=params.start_date,
@@ -35,16 +56,42 @@ def extract_transition_counts(params: ModelRunParams) -> tuple[pd.DataFrame, pd.
         sample_pct=params.non_conv_sample_pct,
         censorship_days=params.censorship_days,
     )
+    record_input_if_possible(
+        session,
+        model_run_id=model_run_id,
+        source="plausible",
+        database_id=params.db_plausible,
+        query_name="nonconverting_transitions",
+        df=nonconverting,
+        date_range=(params.start_date, params.end_date),
+        sort_by=["from_ch", "to_ch"],
+    )
     return converting, nonconverting
 
-def extract_raw_paths(params: ModelRunParams) -> pd.DataFrame:
+def extract_raw_paths(
+    params: ModelRunParams,
+    *,
+    model_run_id: int | None = None,
+    session: Session | None = None,
+) -> pd.DataFrame:
     """Extracts full path sequences for Sprint 7 analysis."""
-    return get_raw_paths(
+    df = get_raw_paths(
         database_id=params.db_plausible,
         start_date=params.start_date,
         end_date=params.end_date,
         lookback=params.lookback_days
     )
+    record_input_if_possible(
+        session,
+        model_run_id=model_run_id,
+        source="plausible",
+        database_id=params.db_plausible,
+        query_name="raw_paths",
+        df=df,
+        date_range=(params.start_date, params.end_date),
+        sort_by=["path_sequence"],
+    )
+    return df
 
 def should_batch_transition_extraction(params: ModelRunParams) -> bool:
     if params.batch_mode == "never":
@@ -60,6 +107,9 @@ def should_batch_transition_extraction(params: ModelRunParams) -> bool:
 
 def extract_transition_counts_batched(
     params: ModelRunParams,
+    *,
+    model_run_id: int | None = None,
+    session: Session | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     converting_batches = []
     nonconverting_batches = []
@@ -73,7 +123,11 @@ def extract_transition_counts_batched(
                 "batch_mode": "never",
             }
         )
-        converting, nonconverting = extract_transition_counts(month_params)
+        converting, nonconverting = extract_transition_counts(
+            month_params,
+            model_run_id=model_run_id,
+            session=session,
+        )
         converting_batches.append(converting)
         nonconverting_batches.append(nonconverting)
 
@@ -114,14 +168,29 @@ def _aggregate_nonconverting(frames: list[pd.DataFrame]) -> pd.DataFrame:
     )
 
 
-def extract_observed_conversion_rate(params: ModelRunParams) -> float:
-    return get_conversion_rate(
+def extract_observed_conversion_rate(
+    params: ModelRunParams,
+    *,
+    model_run_id: int | None = None,
+    session: Session | None = None,
+) -> float:
+    value = get_conversion_rate(
         database_id=params.db_plausible,
         start_date=params.start_date,
         end_date=params.end_date,
         sample_pct=params.non_conv_sample_pct,
         censorship_days=params.censorship_days,
     )
+    record_input_if_possible(
+        session,
+        model_run_id=model_run_id,
+        source="plausible",
+        database_id=params.db_plausible,
+        query_name="observed_conversion_rate",
+        df=pd.DataFrame([{"observed_conversion_rate": value}]),
+        date_range=(params.start_date, params.end_date),
+    )
+    return value
 
 
 def extract_censored_count(params: ModelRunParams) -> tuple[int, int]:
@@ -138,19 +207,50 @@ def extract_censored_count(params: ModelRunParams) -> tuple[int, int]:
     )
 
 
-def extract_total_revenue(params: ModelRunParams) -> float:
-    return get_total_revenue(
+def extract_total_revenue(
+    params: ModelRunParams,
+    *,
+    model_run_id: int | None = None,
+    session: Session | None = None,
+) -> float:
+    value = get_total_revenue(
         database_id=params.db_plausible,
         start_date=params.start_date,
         end_date=params.end_date,
     )
+    record_input_if_possible(
+        session,
+        model_run_id=model_run_id,
+        source="plausible",
+        database_id=params.db_plausible,
+        query_name="total_revenue",
+        df=pd.DataFrame([{"total_revenue": value}]),
+        date_range=(params.start_date, params.end_date),
+    )
+    return value
 
 
-def extract_spend(params: ModelRunParams) -> pd.DataFrame:
+def extract_spend(
+    params: ModelRunParams,
+    *,
+    model_run_id: int | None = None,
+    session: Session | None = None,
+) -> pd.DataFrame:
     if params.db_datamart is None:
         return pd.DataFrame(columns=["channel", "spend"])
-    return get_channel_spend(
+    df = get_channel_spend(
         db_datamart=params.db_datamart,
         start_date=params.start_date,
         end_date=params.end_date,
     )
+    record_input_if_possible(
+        session,
+        model_run_id=model_run_id,
+        source="datamart",
+        database_id=params.db_datamart,
+        query_name="channel_spend",
+        df=df,
+        date_range=(params.start_date, params.end_date),
+        sort_by=["channel"],
+    )
+    return df
