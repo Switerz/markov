@@ -1,13 +1,29 @@
 """Model run API endpoints."""
 
+import math
 from pathlib import Path
 
 import config
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from gograph.backend.app.api.deps import get_db_session
+from gograph.backend.app.api.row_schemas import (
+    ChannelMetricRow,
+    DataQualityRow,
+    DiagnosticRow,
+    FunnelAttributionRow,
+    FunnelValidationRow,
+    InsightRow,
+    LoopDiagnosticRow,
+    PathRow,
+    SequentialEffectRow,
+    SessionQualityRow,
+    TouchpointRow,
+    TransitionRow,
+)
 from gograph.backend.app.api.schemas import (
     ModelRunCreateRequest,
     ModelRunOverviewResponse,
@@ -98,7 +114,7 @@ def _get_channels_by_type(
     model_run_id: int,
     model_type: str,
     session: Session,
-) -> dict:
+) -> TableResponse[ChannelMetricRow]:
     """Shared logic: fetch attribution rows filtered by model_type, add first/last click."""
     import pandas as pd
     _ensure_run_exists(model_run_id, session)
@@ -122,100 +138,110 @@ def _get_channels_by_type(
     if not first_last.empty and not primary.empty:
         primary = primary.merge(first_last, on="channel", how="left")
 
-    return {
-        "model_run_id": model_run_id,
-        "table": "attribution_results",
-        "rows": primary.to_dict("records") if not primary.empty else [],
-    }
+    records: list[dict] = [] if primary.empty else primary.to_dict("records")
+    return TableResponse[ChannelMetricRow](
+        model_run_id=model_run_id,
+        table="attribution_results",
+        rows=_rows_to_models(records, ChannelMetricRow),
+    )
 
 
-@router.get("/{model_run_id}/channels", response_model=TableResponse)
+@router.get("/{model_run_id}/channels", response_model=TableResponse[ChannelMetricRow])
 def get_channels(
     model_run_id: int,
     session: Session = Depends(get_db_session),
-):
-    """Primary attribution — funnel model when active, raw otherwise."""
+) -> TableResponse[ChannelMetricRow]:
+    """Primary attribution — funnel model when active, raw otherwise.
+
+    Includes PFC fields (`pfc_weight`, `pfc_delta_pp`) when persisted on
+    AttributionResult; `None` otherwise.
+    """
     return _get_channels_by_type(model_run_id, "funnel", session)
 
 
-@router.get("/{model_run_id}/raw-channels", response_model=TableResponse)
+@router.get("/{model_run_id}/raw-channels", response_model=TableResponse[ChannelMetricRow])
 def get_raw_channels(
     model_run_id: int,
     session: Session = Depends(get_db_session),
-):
+) -> TableResponse[ChannelMetricRow]:
     """Raw Channel Markov baseline (always order-1, no event enrichment)."""
     return _get_channels_by_type(model_run_id, "raw", session)
 
 
-@router.get("/{model_run_id}/diagnostics", response_model=TableResponse)
+@router.get("/{model_run_id}/diagnostics", response_model=TableResponse[DiagnosticRow])
 def get_diagnostics(
     model_run_id: int,
     session: Session = Depends(get_db_session),
-):
-    return _table_response(model_run_id, "channel_diagnostics", session)
+) -> TableResponse[DiagnosticRow]:
+    return _typed_table_response(model_run_id, "channel_diagnostics", session, DiagnosticRow)
 
 
-@router.get("/{model_run_id}/insights", response_model=TableResponse)
+@router.get("/{model_run_id}/insights", response_model=TableResponse[InsightRow])
 def get_insights(
     model_run_id: int,
     session: Session = Depends(get_db_session),
-):
+) -> TableResponse[InsightRow]:
     _ensure_run_exists(model_run_id, session)
     attribution = get_model_run_table(model_run_id, "attribution_results", session=session)
     transitions = get_model_run_table(model_run_id, "transition_counts", session=session)
     touchpoints = compute_touchpoint_metrics(transitions)
     insights = generate_channel_insights(attribution, touchpoints)
-    return {
-        "model_run_id": model_run_id,
-        "table": "insights",
-        "rows": [] if insights.empty else insights.to_dict("records"),
-    }
+    records: list[dict] = [] if insights.empty else insights.to_dict("records")
+    return TableResponse[InsightRow](
+        model_run_id=model_run_id,
+        table="insights",
+        rows=_rows_to_models(records, InsightRow),
+    )
 
 
-@router.get("/{model_run_id}/touchpoints", response_model=TableResponse)
+@router.get("/{model_run_id}/touchpoints", response_model=TableResponse[TouchpointRow])
 def get_touchpoints(
     model_run_id: int,
     session: Session = Depends(get_db_session),
-):
+) -> TableResponse[TouchpointRow]:
     _ensure_run_exists(model_run_id, session)
     transitions = get_model_run_table(model_run_id, "transition_counts", session=session)
     touchpoints = compute_touchpoint_metrics(transitions)
-    return {
-        "model_run_id": model_run_id,
-        "table": "touchpoints",
-        "rows": [] if touchpoints.empty else touchpoints.to_dict("records"),
-    }
+    records: list[dict] = [] if touchpoints.empty else touchpoints.to_dict("records")
+    return TableResponse[TouchpointRow](
+        model_run_id=model_run_id,
+        table="touchpoints",
+        rows=_rows_to_models(records, TouchpointRow),
+    )
 
 
-@router.get("/{model_run_id}/transitions", response_model=TableResponse)
+@router.get("/{model_run_id}/transitions", response_model=TableResponse[TransitionRow])
 def get_transitions(
     model_run_id: int,
     session: Session = Depends(get_db_session),
-):
-    return _table_response(model_run_id, "transition_counts", session)
+) -> TableResponse[TransitionRow]:
+    return _typed_table_response(model_run_id, "transition_counts", session, TransitionRow)
 
 
-@router.get("/{model_run_id}/paths", response_model=TableResponse)
+@router.get("/{model_run_id}/paths", response_model=TableResponse[PathRow])
 def get_paths(
     model_run_id: int,
     session: Session = Depends(get_db_session),
-):
-    return _table_response(model_run_id, "path_summary", session)
+) -> TableResponse[PathRow]:
+    return _typed_table_response(model_run_id, "path_summary", session, PathRow)
 
 
-@router.get("/{model_run_id}/loops", response_model=TableResponse)
+@router.get("/{model_run_id}/loops", response_model=TableResponse[PathRow])
 def get_loops(
     model_run_id: int,
     session: Session = Depends(get_db_session),
-):
+) -> TableResponse[PathRow]:
+    _ensure_run_exists(model_run_id, session)
     paths = get_model_run_table(model_run_id, "path_summary", session=session)
-    if paths.empty:
-        rows = []
-    elif "contains_loop" in paths.columns:
-        rows = paths[paths["contains_loop"].fillna(0).astype(int) == 1].to_dict("records")
+    if paths.empty or "contains_loop" not in paths.columns:
+        records: list[dict] = []
     else:
-        rows = []
-    return {"model_run_id": model_run_id, "table": "loops", "rows": rows}
+        records = paths[paths["contains_loop"].fillna(0).astype(int) == 1].to_dict("records")
+    return TableResponse[PathRow](
+        model_run_id=model_run_id,
+        table="loops",
+        rows=_rows_to_models(records, PathRow),
+    )
 
 
 @router.get("/{model_run_id}/graph")
@@ -230,44 +256,48 @@ def get_graph(
     return build_journey_graph(transitions, matrix)
 
 
-@router.get("/{model_run_id}/data-quality", response_model=TableResponse)
+@router.get("/{model_run_id}/data-quality", response_model=TableResponse[DataQualityRow])
 def get_data_quality(
     model_run_id: int,
     session: Session = Depends(get_db_session),
-):
-    return _table_response(model_run_id, "data_quality_checks", session)
+) -> TableResponse[DataQualityRow]:
+    return _typed_table_response(model_run_id, "data_quality_checks", session, DataQualityRow)
 
 
 # ---------------------------------------------------------------------------
 # Sprint 11 — Loop diagnostics
 # ---------------------------------------------------------------------------
 
-@router.get("/{model_run_id}/loop-diagnostics", response_model=TableResponse)
+@router.get("/{model_run_id}/loop-diagnostics", response_model=TableResponse[LoopDiagnosticRow])
 def get_loop_diagnostics(
     model_run_id: int,
     session: Session = Depends(get_db_session),
-):
+) -> TableResponse[LoopDiagnosticRow]:
     """Per-channel loop statistics: self-loop rates, conversion lift, exit distribution."""
-    return _table_response(model_run_id, "loop_diagnostics", session)
+    return _typed_table_response(model_run_id, "loop_diagnostics", session, LoopDiagnosticRow)
 
 
 # ---------------------------------------------------------------------------
 # Sprint 13 — Funnel Stage Attribution
 # ---------------------------------------------------------------------------
 
-@router.get("/{model_run_id}/funnel-attribution", response_model=TableResponse)
+@router.get("/{model_run_id}/funnel-attribution", response_model=TableResponse[FunnelAttributionRow])
 def get_funnel_attribution(
     model_run_id: int,
     channel: str | None = None,
     session: Session = Depends(get_db_session),
-):
+) -> TableResponse[FunnelAttributionRow]:
     """Markov/Shapley attribution per composite state (channel / funnel_stage)."""
     _ensure_run_exists(model_run_id, session)
     df = get_model_run_table(model_run_id, "funnel_state_attribution", session=session)
     if not df.empty and channel:
         df = df[df["channel"] == channel]
-    rows = [] if df.empty else df.to_dict("records")
-    return {"model_run_id": model_run_id, "table": "funnel_state_attribution", "rows": rows}
+    records: list[dict] = [] if df.empty else df.to_dict("records")
+    return TableResponse[FunnelAttributionRow](
+        model_run_id=model_run_id,
+        table="funnel_state_attribution",
+        rows=_rows_to_models(records, FunnelAttributionRow),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -335,11 +365,11 @@ def _compute_funnel_validation(
     return sorted(rows, key=lambda r: r["funnel_markov_weight"], reverse=True)
 
 
-@router.get("/{model_run_id}/funnel-validation", response_model=TableResponse)
+@router.get("/{model_run_id}/funnel-validation", response_model=TableResponse[FunnelValidationRow])
 def get_funnel_validation(
     model_run_id: int,
     session: Session = Depends(get_db_session),
-):
+) -> TableResponse[FunnelValidationRow]:
     """
     Sprint 16 — Funnel Attribution Validation.
 
@@ -351,7 +381,9 @@ def get_funnel_validation(
     _ensure_run_exists(model_run_id, session)
     state_df = get_model_run_table(model_run_id, "funnel_state_attribution", session=session)
     if state_df.empty:
-        return {"model_run_id": model_run_id, "table": "funnel_validation", "rows": []}
+        return TableResponse[FunnelValidationRow](
+            model_run_id=model_run_id, table="funnel_validation", rows=[]
+        )
 
     raw_df = get_model_run_table(model_run_id, "attribution_results", session=session)
     raw_map: dict = {}
@@ -360,30 +392,34 @@ def get_funnel_validation(
         if not raw_rows.empty:
             raw_map = dict(zip(raw_rows["channel"], raw_rows["markov_weight"].fillna(0.0)))
 
-    rows = _compute_funnel_validation(state_df, raw_map)
-    return {"model_run_id": model_run_id, "table": "funnel_validation", "rows": rows}
+    records = _compute_funnel_validation(state_df, raw_map)
+    return TableResponse[FunnelValidationRow](
+        model_run_id=model_run_id,
+        table="funnel_validation",
+        rows=_rows_to_models(records, FunnelValidationRow),
+    )
 
 
 # ---------------------------------------------------------------------------
 # Sprint 14 — Sequential Effects
 # ---------------------------------------------------------------------------
 
-@router.get("/{model_run_id}/session-quality", response_model=TableResponse)
+@router.get("/{model_run_id}/session-quality", response_model=TableResponse[SessionQualityRow])
 def get_session_quality(
     model_run_id: int,
     session: Session = Depends(get_db_session),
-):
+) -> TableResponse[SessionQualityRow]:
     """Per-channel session engagement metrics: duration, pageviews, bounce rate, events."""
-    return _table_response(model_run_id, "session_quality", session)
+    return _typed_table_response(model_run_id, "session_quality", session, SessionQualityRow)
 
 
-@router.get("/{model_run_id}/sequential-effects", response_model=TableResponse)
+@router.get("/{model_run_id}/sequential-effects", response_model=TableResponse[SequentialEffectRow])
 def get_sequential_effects(
     model_run_id: int,
     previous_channel: str | None = None,
     label: str | None = None,
     session: Session = Depends(get_db_session),
-):
+) -> TableResponse[SequentialEffectRow]:
     """Order-2 conditional conversion probabilities for all bigram pairs."""
     _ensure_run_exists(model_run_id, session)
     df = get_model_run_table(model_run_id, "sequential_effects", session=session)
@@ -391,8 +427,12 @@ def get_sequential_effects(
         df = df[df["previous_channel"] == previous_channel]
     if not df.empty and label:
         df = df[df["diagnostic_label"] == label]
-    rows = [] if df.empty else df.to_dict("records")
-    return {"model_run_id": model_run_id, "table": "sequential_effects", "rows": rows}
+    records: list[dict] = [] if df.empty else df.to_dict("records")
+    return TableResponse[SequentialEffectRow](
+        model_run_id=model_run_id,
+        table="sequential_effects",
+        rows=_rows_to_models(records, SequentialEffectRow),
+    )
 
 
 @router.get("/{model_run_id}/export")
@@ -428,11 +468,36 @@ def register_model_run_export(
     return {"id": export_id, "model_run_id": model_run_id}
 
 
-def _table_response(model_run_id: int, table: str, session: Session) -> dict:
+def _clean_row(row: dict) -> dict:
+    """Replace NaN / pandas NA scalars with None so Pydantic Optional fields accept them."""
+    cleaned: dict = {}
+    for key, value in row.items():
+        if isinstance(value, float) and math.isnan(value):
+            cleaned[key] = None
+        else:
+            cleaned[key] = value
+    return cleaned
+
+
+def _rows_to_models(records: list[dict], model: type[BaseModel]) -> list[BaseModel]:
+    return [model.model_validate(_clean_row(r)) for r in records]
+
+
+def _typed_table_response(
+    model_run_id: int,
+    table: str,
+    session: Session,
+    row_model: type[BaseModel],
+) -> TableResponse:
+    """Generic helper: fetch table, validate rows against `row_model`, return TableResponse."""
     _ensure_run_exists(model_run_id, session)
     df = get_model_run_table(model_run_id, table, session=session)
-    rows = [] if df.empty else df.to_dict("records")
-    return {"model_run_id": model_run_id, "table": table, "rows": rows}
+    records: list[dict] = [] if df.empty else df.to_dict("records")
+    return TableResponse[row_model](  # type: ignore[valid-type]
+        model_run_id=model_run_id,
+        table=table,
+        rows=_rows_to_models(records, row_model),
+    )
 
 
 def _ensure_run_exists(model_run_id: int, session: Session) -> None:
