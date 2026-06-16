@@ -7,6 +7,9 @@ import styles from "./Drawer.module.css";
 export type DrawerProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  modal?: boolean;
+  showOverlay?: boolean;
+  dismissOnInteractOutside?: boolean;
   /**
    * Heading for the drawer. Accepts a plain string OR a ReactNode so callers
    * can compose richer headers (icon + name + badge) without losing the
@@ -21,19 +24,27 @@ export type DrawerProps = {
 export function Drawer({
   open,
   onOpenChange,
+  modal = true,
+  showOverlay = true,
+  dismissOnInteractOutside = true,
   title,
   width = 400,
   children,
   className,
 }: DrawerProps) {
   return (
-    <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
+    <RadixDialog.Root open={open} onOpenChange={onOpenChange} modal={modal}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className={styles.overlay} />
+        {showOverlay && <RadixDialog.Overlay className={styles.overlay} />}
         <RadixDialog.Content
           className={cn(styles.content, className)}
           style={{ ["--drawer-width" as string]: `${width}px` } as CSSProperties}
           aria-describedby={undefined}
+          onInteractOutside={
+            dismissOnInteractOutside
+              ? undefined
+              : (event) => event.preventDefault()
+          }
         >
           <header className={styles.header}>
             <RadixDialog.Title className={styles.title}>

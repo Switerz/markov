@@ -15,8 +15,13 @@ import "@xyflow/react/dist/style.css";
 import { Plus, Play, Trash2 } from "lucide-react";
 import { Button, Card, useToast } from "../../../shared/ui";
 import { useScenarioSimulation } from "../../../shared/hooks/useScenarioSimulation";
-import { useActiveRun } from "../../../app/hooks/useActiveRun";
-import type { EstimatedMetric, JourneyBuilder as JourneyBuilderData } from "../types";
+import { api } from "../../../lib/api";
+import { formatCompactBRL } from "../../../shared/format";
+import { topologicalOrder } from "../lib/topological";
+import type {
+  EstimatedMetric,
+  JourneyBuilder as JourneyBuilderData,
+} from "../types";
 import styles from "./JourneyPathBuilder.module.css";
 
 const KNOWN_CHANNELS = [
@@ -36,9 +41,15 @@ const KNOWN_CHANNELS = [
   "Other",
 ];
 
-export type JourneyPathBuilderProps = { builder: JourneyBuilderData };
+export type JourneyPathBuilderProps = {
+  builder: JourneyBuilderData;
+  /** When provided, "Simular caminho" persists a scenario via the API
+   * (createScenario → analyzeScenario) and renders real metrics. Falls back
+   * to the local mock simulation when null. */
+  runId?: number;
+};
 
-type NodeData = { label: string };
+type NodeData = { id: string; label: string };
 
 function nodeStyle(isHypothetical: boolean) {
   return {
@@ -55,10 +66,24 @@ function nodeStyle(isHypothetical: boolean) {
   } as const;
 }
 
-export function JourneyPathBuilder({ builder }: JourneyPathBuilderProps) {
+type LiveMetric = EstimatedMetric;
+
+function formatProb(p: number | null | undefined): string {
+  if (p == null) return "—";
+  return `${(p * 100).toFixed(2).replace(".", ",")}%`;
+}
+
+function formatTicket(t: number | null | undefined): string {
+  if (t == null) return "—";
+  return formatCompactBRL(t);
+}
+
+export function JourneyPathBuilder({ builder, runId }: JourneyPathBuilderProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<NodeData>>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [customLabel, setCustomLabel] = useState("");
+  const [liveMetrics, setLiveMetrics] = useState<LiveMetric[] | null>(null);
+  const [simulating, setSimulating] = useState(false);
 
   const onConnect = useCallback(
     (connection: Connection) =>
@@ -75,7 +100,7 @@ export function JourneyPathBuilder({ builder }: JourneyPathBuilderProps) {
         const newNode: Node<NodeData> = {
           id,
           position: { x, y },
-          data: { label },
+          data: { id, label },
           style: nodeStyle(isHypothetical),
         };
         return [...prev, newNode];
@@ -94,25 +119,79 @@ export function JourneyPathBuilder({ builder }: JourneyPathBuilderProps) {
   function clear() {
     setNodes([]);
     setEdges([]);
+    setLiveMetrics(null);
   }
 
   const toast = useToast();
-  const activeRun = useActiveRun();
 
-  const onSimulate = useCallback(() => {
+  const onSimulate = useCallback(async () => {
     if (nodes.length < 2) return;
-    // TODO(api): when an activeRun is available, persist via api.createScenario
-    // and call api.analyzeScenario(id) — for now we use the local simulation
-    // results that are already rendered below.
-    if (activeRun) {
-      toast.push(
-        `Caminho simulado (run ${activeRun.id}) — usando estimativa local`,
-        "blue",
-      );
-    } else {
+    if (runId == null) {
+      // Local fallback simulation (no active run): keep the mock metrics that
+      // useScenarioSimulation already produces below.
+      setLiveMetrics(null);
       toast.push("Caminho simulado localmente", "blue");
+      return;
     }
-  }, [activeRun, nodes.length, toast]);
+    setSimulating(true);
+    try {
+      const orderedIds = topologicalOrder(nodes, edges);
+      const labelById = new Map(
+        nodes.map((n) => [n.id, String(n.data?.label ?? n.id)]),
+      );
+      const pathChannels = orderedIds
+        .map((id) => labelById.get(id) ?? id)
+        .filter((label): label is string => Boolean(label));
+      const saved = await api.createScenario({
+        model_run_id: runId,
+        name: "Caminho ad-hoc",
+        nodes: nodes.map((n) => ({
+          id: n.id,
+          label: String(n.data?.label ?? n.id),
+          position: n.position,
+        })),
+        edges: edges.map((e) => ({
+          id: e.id,
+          source: e.source,
+          target: e.target,
+        })),
+        path_channels: pathChannels,
+      });
+      const result = await api.analyzeScenario(saved.id);
+      const newMetrics: LiveMetric[] = [
+        {
+          title: "Participação esperada",
+          value: formatProb(result.path_probability),
+        },
+        {
+          title: "Frequência média",
+          value: `${pathChannels.length} toques`,
+        },
+        {
+          title: "Conversão esperada",
+          value: formatProb(result.composite_conversion_probability),
+        },
+        {
+          title: "Receita esperada",
+          value: formatTicket(result.expected_revenue),
+          subtitle:
+            result.expected_ticket != null
+              ? `ticket ${formatCompactBRL(result.expected_ticket)}`
+              : undefined,
+        },
+      ];
+      setLiveMetrics(newMetrics);
+      toast.push(
+        `Caminho analisado — receita esperada: ${formatTicket(result.expected_revenue)}`,
+        "green",
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "erro desconhecido";
+      toast.push(`Falha ao simular: ${msg}`, "red");
+    } finally {
+      setSimulating(false);
+    }
+  }, [edges, nodes, runId, toast]);
 
   const sim = useScenarioSimulation<EstimatedMetric>(
     nodes.map((n, i) => ({
@@ -121,6 +200,12 @@ export function JourneyPathBuilder({ builder }: JourneyPathBuilderProps) {
     })),
     builder.estimatedInterpretation,
   );
+
+  const displayedMetrics = liveMetrics ?? sim.metrics;
+  const displayedDescription =
+    liveMetrics != null
+      ? `Resultado da execução (run #${runId})`
+      : sim.description;
 
   return (
     <Card className={styles.root}>
@@ -188,9 +273,9 @@ export function JourneyPathBuilder({ builder }: JourneyPathBuilderProps) {
           </ReactFlow>
         </div>
 
-        <p className={styles.simNote}>{sim.description}</p>
+        <p className={styles.simNote}>{displayedDescription}</p>
         <div className={styles.simGrid}>
-          {sim.metrics.map((m) => (
+          {displayedMetrics.map((m) => (
             <div key={m.title} className={styles.simTile}>
               <span className={styles.simLabel}>{m.title}</span>
               <span className={styles.simValue}>{m.value}</span>
@@ -207,9 +292,9 @@ export function JourneyPathBuilder({ builder }: JourneyPathBuilderProps) {
             size="sm"
             iconLeft={<Play size={14} aria-hidden />}
             onClick={onSimulate}
-            disabled={nodes.length < 2}
+            disabled={nodes.length < 2 || simulating}
           >
-            {builder.primaryAction}
+            {simulating ? "Analisando…" : builder.primaryAction}
           </Button>
           <Button
             variant="secondary"

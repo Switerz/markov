@@ -1,11 +1,22 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { vi } from "vitest";
 import { JourneyFilters } from "./JourneyFilters";
 import { journeysMock } from "../journeys.mock";
+import { DEFAULT_JOURNEY_FILTERS } from "../hooks/useJourneysData";
 
 describe("JourneyFilters", () => {
   it("renders all filters from the mock", () => {
-    render(<JourneyFilters filters={journeysMock.filters} />);
+    render(
+      <JourneyFilters
+        filters={journeysMock.filters}
+        state={DEFAULT_JOURNEY_FILTERS}
+        onChange={vi.fn()}
+        channelOptions={journeysMock.journeyFlow.middleNodes.map(
+          (node) => node.channel,
+        )}
+      />,
+    );
     // 5 selects/dateRange + 2 switches = 7 controls; we verify the switches by
     // label and that at least one select trigger exists.
     expect(screen.getByText("Ocultar diretos")).toBeInTheDocument();

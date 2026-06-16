@@ -3,9 +3,16 @@
   max-width: 800px;
   margin: 0 auto;
   width: 100%;
+  min-width: 0;
 }
 
 .muted {
   color: var(--gg-text-secondary);
   font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: var(--gg-space-3);
+  }
 }

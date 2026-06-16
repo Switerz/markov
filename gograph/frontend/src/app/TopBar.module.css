@@ -8,15 +8,18 @@
   position: sticky;
   top: 0;
   z-index: var(--gg-z-sticky);
+  min-width: 0;
+  max-width: 100%;
 }
 .headRow {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--gg-space-4);
+  min-width: 0;
 }
 .titleBlock { display: flex; flex-direction: column; gap: var(--gg-space-1); min-width: 0; }
-.breadcrumb { font-size: 12px; color: var(--gg-text-secondary); }
+.breadcrumb { font-size: 12px; color: var(--gg-text-secondary); min-width: 0; }
 .breadcrumb ol { list-style: none; margin: 0; padding: 0; display: flex; align-items: center; gap: 6px; }
 .breadcrumb a { color: var(--gg-text-secondary); text-decoration: none; }
 .breadcrumb a:hover { color: var(--gg-text-primary); }
@@ -28,11 +31,50 @@
   line-height: 1.2;
   margin: 0;
   color: var(--gg-text-primary);
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 .subtitle {
   margin: 2px 0 0;
   font-size: var(--gg-text-sm);
   color: var(--gg-text-secondary);
+  overflow-wrap: anywhere;
 }
-.actions { display: flex; align-items: center; gap: var(--gg-space-2); flex-shrink: 0; }
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--gg-space-2);
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
 .filters { display: flex; align-items: center; flex-wrap: wrap; gap: var(--gg-space-2); }
+
+@media (max-width: 860px) {
+  .headRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 760px) {
+  .root {
+    top: var(--gg-sidebar-mobile-height);
+  }
+}
+
+@media (max-width: 520px) {
+  .root {
+    padding: var(--gg-space-3);
+  }
+
+  .actions > * {
+    max-width: 100%;
+  }
+}

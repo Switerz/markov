@@ -191,6 +191,9 @@ export function ChannelDetailsDrawer({
     <Drawer
       open={open}
       onOpenChange={onOpenChange}
+      modal={false}
+      showOverlay={false}
+      dismissOnInteractOutside={false}
       width={420}
       title={
         <ChannelHeaderTitle

@@ -1,12 +1,22 @@
 .shell {
   min-height: 100vh;
-  display: flex;
   background: var(--gg-surface-soft);
+  min-width: 0;
+  width: 100%;
+  overflow-x: clip;
 }
 .main {
-  flex: 1 1 auto;
   min-width: 0;
+  max-width: calc(100vw - var(--gg-sidebar-width));
+  margin-left: var(--gg-sidebar-width);
   display: flex;
   flex-direction: column;
-  overflow-x: hidden;
+}
+
+@media (max-width: 760px) {
+  .main {
+    max-width: 100vw;
+    margin-left: 0;
+    padding-top: var(--gg-sidebar-mobile-height);
+  }
 }

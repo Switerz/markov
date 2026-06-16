@@ -81,15 +81,28 @@
   --gg-z-modal: 60;
   --gg-z-toast: 70;
   --gg-z-tooltip: 80;
+
+  /* App shell */
+  --gg-sidebar-width: 240px;
+  --gg-sidebar-mobile-height: 112px;
 }
 
-html { font-size: var(--gg-text-base); }
+html {
+  box-sizing: border-box;
+  font-size: var(--gg-text-base);
+}
+*, *::before, *::after { box-sizing: inherit; }
 html, body {
   font-family: var(--gg-font-body);
   color: var(--gg-text-primary);
   background: var(--gg-bg);
   line-height: 1.45;
-  overflow-x: hidden;
+  overflow-x: clip;
+  margin: 0;
+}
+#root {
+  min-height: 100vh;
+  min-width: 0;
 }
 h1, h2, h3, h4, h5, h6 { font-family: var(--gg-font-display); }
 button, input, select, textarea { font-family: inherit; }

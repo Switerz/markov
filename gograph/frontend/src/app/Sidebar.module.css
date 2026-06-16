@@ -1,5 +1,5 @@
 .sidebar {
-  width: 240px;
+  width: var(--gg-sidebar-width);
   flex-shrink: 0;
   background: var(--gg-surface);
   border-right: 1px solid var(--gg-border);
@@ -8,8 +8,12 @@
   padding: var(--gg-space-5) var(--gg-space-3);
   gap: var(--gg-space-2);
   height: 100vh;
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  z-index: calc(var(--gg-z-sticky) + 1);
+  min-width: 0;
+  overflow-y: auto;
 }
 .brand {
   display: flex;
@@ -56,6 +60,12 @@
   font-size: var(--gg-text-md);
   position: relative;
   transition: background-color 120ms ease-out, color 120ms ease-out;
+  min-width: 0;
+}
+.link span:not(.activeDot) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .link:hover {
   background: var(--gg-surface-soft);
@@ -91,3 +101,34 @@
 .userBody { display: flex; flex-direction: column; line-height: 1.2; }
 .userName { font-size: var(--gg-text-sm); font-weight: 600; color: var(--gg-text-primary); }
 .userRole { font-size: var(--gg-text-xs); color: var(--gg-text-secondary); }
+
+@media (max-width: 760px) {
+  .sidebar {
+    width: 100%;
+    height: var(--gg-sidebar-mobile-height);
+    padding: var(--gg-space-3);
+    gap: var(--gg-space-3);
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: 0;
+    border-bottom: 1px solid var(--gg-border);
+  }
+
+  .brand {
+    padding: 0 var(--gg-space-1);
+  }
+
+  .list {
+    flex-direction: row;
+    min-width: max-content;
+  }
+
+  .bottom,
+  .user {
+    display: none;
+  }
+
+  .link {
+    white-space: nowrap;
+  }
+}

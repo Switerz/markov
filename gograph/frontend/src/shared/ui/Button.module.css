@@ -1,6 +1,7 @@
 .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--gg-space-2);
   border-radius: var(--gg-radius-control);
   font-family: var(--gg-font-body);
@@ -9,6 +10,8 @@
   cursor: pointer;
   transition: background-color 120ms ease-out, border-color 120ms ease-out, color 120ms ease-out;
   white-space: nowrap;
+  max-width: 100%;
+  min-width: 0;
 }
 .btn:focus-visible {
   outline: 2px solid var(--gg-blue);
@@ -58,7 +61,19 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
 }
 .btn.icon { padding: 8px; }
 
+.label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .loading .label { opacity: 0.6; }
+
+@media (max-width: 420px) {
+  .btn:not(.icon) {
+    flex: 1 1 auto;
+  }
+}

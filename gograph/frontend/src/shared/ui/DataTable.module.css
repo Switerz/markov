@@ -5,11 +5,14 @@
   border: 1px solid var(--gg-border);
   border-radius: var(--gg-radius-card);
   overflow: hidden;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .toolbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--gg-space-3);
   padding: var(--gg-space-3) var(--gg-space-4);
   border-bottom: 1px solid var(--gg-border);
@@ -45,6 +48,8 @@
 
 .scroll {
   overflow: auto;
+  width: 100%;
+  min-width: 0;
   max-height: 60vh;
   -webkit-overflow-scrolling: touch;
 }
@@ -102,6 +107,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--gg-space-2);
   padding: var(--gg-space-2) var(--gg-space-4);
   background: var(--gg-surface-soft);
   border-top: 1px solid var(--gg-border);
@@ -130,3 +137,13 @@
   outline: none;
 }
 .menuItem[data-highlighted] { background: var(--gg-surface-soft); }
+
+@media (max-width: 520px) {
+  .toolbar {
+    align-items: stretch;
+  }
+
+  .searchWrap {
+    width: 100%;
+  }
+}

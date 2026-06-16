@@ -1,8 +1,7 @@
-import { useState } from "react";
-import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { useEffect, useState } from "react";
 import { TopBar } from "../../app/TopBar";
 import { Button, useToast } from "../../shared/ui";
-import { Plus, Settings, Download, EllipsisVertical } from "lucide-react";
+import { Plus, Settings, Download } from "lucide-react";
 import { NewRunDialog } from "../../app/dialogs/NewRunDialog";
 import { downloadCsv, todayIso } from "../../shared/format";
 import type { ModelRunCreatePayload } from "../../lib/api";
@@ -19,12 +18,33 @@ export function ExecutionsQualityPage() {
   const defaultSelected =
     data.executionHistory.rows.find((r) => r.selected)?.id ??
     data.executionHistory.rows[0]?.id;
-  // TODO(api): when api.getOverview(selectedId) is wired, swap the panel data
-  // by selected id. Today the right panel always shows the mocked execution.
   const [selectedId, setSelectedId] = useState<string | undefined>(defaultSelected);
   const [newRunOpen, setNewRunOpen] = useState(false);
-  const [reexecOpen, setReexecOpen] = useState(false);
+  const [dialogDefaults, setDialogDefaults] =
+    useState<Partial<ModelRunCreatePayload> | undefined>();
+  const [dialogTitle, setDialogTitle] = useState("Nova execução");
+  const [dialogSubmitLabel, setDialogSubmitLabel] = useState("Criar execução");
   const toast = useToast();
+  const effectiveSelectedId = selectedId ?? defaultSelected;
+  const selectedPanel = data.getDetailsForRun(effectiveSelectedId);
+
+  useEffect(() => {
+    if (!selectedId && defaultSelected) {
+      setSelectedId(defaultSelected);
+    }
+  }, [defaultSelected, selectedId]);
+
+  function openRunDialog(options?: {
+    defaults?: Partial<ModelRunCreatePayload>;
+    title?: string;
+    submitLabel?: string;
+  }) {
+    setDialogDefaults(options?.defaults);
+    setDialogTitle(options?.title ?? "Nova execução");
+    setDialogSubmitLabel(options?.submitLabel ?? "Criar execução");
+    setNewRunOpen(true);
+  }
+
   return (
     <>
       <TopBar
@@ -35,7 +55,7 @@ export function ExecutionsQualityPage() {
             <Button
               variant="primary"
               iconLeft={<Plus size={16} />}
-              onClick={() => setNewRunOpen(true)}
+              onClick={() => openRunDialog()}
             >
               Nova execução
             </Button>
@@ -43,7 +63,11 @@ export function ExecutionsQualityPage() {
               variant="secondary"
               iconLeft={<Settings size={16} />}
               onClick={() =>
-                toast.push("Parâmetros do modelo — em breve", "blue")
+                openRunDialog({
+                  defaults: data.getDefaultsForRun(effectiveSelectedId),
+                  title: "Nova execução com parâmetros atuais",
+                  submitLabel: "Criar com estes parâmetros",
+                })
               }
             >
               Parâmetros do modelo
@@ -67,15 +91,29 @@ export function ExecutionsQualityPage() {
                 downloadCsv(`execucoes-${todayIso()}.csv`, rows);
                 toast.push("Exportação iniciada", "green");
               }}
+              disabled={data.executionHistory.rows.length === 0}
             >
               Exportar
             </Button>
           </>
         }
       />
-      <NewRunDialog open={newRunOpen} onOpenChange={setNewRunOpen} />
-      <NewRunDialog open={reexecOpen} onOpenChange={setReexecOpen} />
+      <NewRunDialog
+        open={newRunOpen}
+        onOpenChange={setNewRunOpen}
+        title={dialogTitle}
+        submitLabel={dialogSubmitLabel}
+        defaults={dialogDefaults}
+      />
       <div className={styles.page}>
+        {data.isLoading && (
+          <div className={styles.apiState}>Carregando execuções da API...</div>
+        )}
+        {data.isError && (
+          <div className={styles.apiState}>
+            API indisponível; exibindo dados locais. {data.errorMessage}
+          </div>
+        )}
         <ExecutionSummaryCards metrics={data.summaryMetrics} />
         <div className={styles.grid}>
           <section className={styles.left}>
@@ -91,8 +129,14 @@ export function ExecutionsQualityPage() {
           </section>
           <aside className={styles.right}>
             <ExecutionDetailsPanel
-              panel={data.executionDetailsPanel}
-              onReexecute={() => setReexecOpen(true)}
+              panel={selectedPanel}
+              onReexecute={() =>
+                openRunDialog({
+                  defaults: data.getDefaultsForRun(effectiveSelectedId),
+                  title: "Reexecutar modelo",
+                  submitLabel: "Reexecutar",
+                })
+              }
               onClose={() => setSelectedId(undefined)}
               onMoreActions={() =>
                 toast.push("Mais ações — em breve", "blue")

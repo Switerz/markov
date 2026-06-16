@@ -16,6 +16,9 @@ import styles from "./NewRunDialog.module.css";
 export type NewRunDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  title?: string;
+  description?: string;
+  submitLabel?: string;
   /**
    * Optional defaults used when "Reexecutar" is invoked — pre-fills the form
    * with parameters from the selected run.
@@ -82,6 +85,9 @@ function mergeDefaults(d?: Partial<ModelRunCreatePayload>): SchemaValues {
 export function NewRunDialog({
   open,
   onOpenChange,
+  title = "Nova execução",
+  description = "Defina o período e os parâmetros do modelo Markov.",
+  submitLabel = "Criar execução",
   defaults,
 }: NewRunDialogProps) {
   const toast = useToast();
@@ -126,8 +132,8 @@ export function NewRunDialog({
     <Modal
       open={open}
       onOpenChange={onOpenChange}
-      title="Nova execução"
-      description="Defina o período e os parâmetros do modelo Markov."
+      title={title}
+      description={description}
       width={560}
       footer={
         <>
@@ -145,7 +151,7 @@ export function NewRunDialog({
             form="new-run-form"
             loading={isSubmitting || mutation.isPending}
           >
-            Criar execução
+            {submitLabel}
           </Button>
         </>
       }

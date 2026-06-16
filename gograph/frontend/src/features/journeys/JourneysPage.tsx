@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Plus, Download } from "lucide-react";
 import { TopBar } from "../../app/TopBar";
 import { Button, Tabs, useToast } from "../../shared/ui";
 import { downloadCsv, todayIso } from "../../shared/format";
 import { NewRunDialog } from "../../app/dialogs/NewRunDialog";
+import { useActiveRun } from "../../app/hooks/useActiveRun";
 import { JourneyFilters } from "./components/JourneyFilters";
 import { JourneyViewTabs } from "./components/JourneyViewTabs";
 import { JourneySankeyPanel } from "./components/JourneySankeyPanel";
@@ -12,7 +13,11 @@ import { TopPathsTable } from "./components/TopPathsTable";
 import { TransitionMatrixHeatmap } from "./components/TransitionMatrixHeatmap";
 import { JourneyPathBuilder } from "./components/JourneyPathBuilder";
 import { LoopsPatternsList } from "./components/LoopsPatternsList";
-import { useJourneysData } from "./hooks/useJourneysData";
+import {
+  DEFAULT_JOURNEY_FILTERS,
+  useJourneysData,
+  type JourneyFiltersState,
+} from "./hooks/useJourneysData";
 import { useJourneyGraphMock } from "./hooks/useJourneyGraphMock";
 import styles from "./JourneysPage.module.css";
 
@@ -23,11 +28,35 @@ import styles from "./JourneysPage.module.css";
 // because the spec lists those as the v1 dedicated tabs AND the bottom
 // 3-card row criterion (acceptance: "três cards na parte inferior").
 export function JourneysPage() {
-  const data = useJourneysData();
+  const [journeyFilters, setJourneyFilters] = useState<JourneyFiltersState>(
+    DEFAULT_JOURNEY_FILTERS,
+  );
+  const data = useJourneysData(journeyFilters);
   const graph = useJourneyGraphMock(data);
   const [tab, setTab] = useState<string>("flow");
   const [newRunOpen, setNewRunOpen] = useState(false);
   const toast = useToast();
+  const activeRun = useActiveRun();
+  const runId = activeRun?.id;
+
+  // Pool of channel labels for origin/destination — derived from sankey nodes
+  // so the dropdowns reflect the channels actually present in the data.
+  const channelOptions = useMemo<string[]>(() => {
+    const pool = new Set<string>();
+    data.journeyFlow.leftNodes.forEach((n) => pool.add(n.channel));
+    data.journeyFlow.middleNodes.forEach((n) => pool.add(n.channel));
+    return Array.from(pool).sort();
+  }, [data.journeyFlow]);
+
+  const setFilter = useCallback(
+    <K extends keyof JourneyFiltersState>(
+      key: K,
+      value: JourneyFiltersState[K],
+    ) => {
+      setJourneyFilters((prev) => ({ ...prev, [key]: value }));
+    },
+    [],
+  );
 
   return (
     <>
@@ -65,7 +94,14 @@ export function JourneysPage() {
             </Button>
           </>
         }
-        filters={<JourneyFilters filters={data.filters} />}
+        filters={
+          <JourneyFilters
+            filters={data.filters}
+            state={journeyFilters}
+            onChange={setFilter}
+            channelOptions={channelOptions}
+          />
+        }
       />
       <NewRunDialog open={newRunOpen} onOpenChange={setNewRunOpen} />
       <div className={styles.page}>
@@ -78,7 +114,10 @@ export function JourneysPage() {
                 metric={data.flowMetric}
                 onSwitchToGraph={() => setTab("graph")}
               />
-              <JourneyPathBuilder builder={data.journeyBuilder} />
+              <JourneyPathBuilder
+                builder={data.journeyBuilder}
+                runId={runId}
+              />
             </div>
           </Tabs.Content>
           <Tabs.Content value="graph">
