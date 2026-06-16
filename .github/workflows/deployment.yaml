@@ -1,0 +1,57 @@
+name: Deploy on server
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Deploy to server
+      uses: appleboy/ssh-action@v1.2.2
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        port: ${{ secrets.SERVER_SSH_PORT }}
+        script: |
+          set -e
+          REPO_SSH="git@github.com:goca-se/ai-content-machine.git"
+          APP_DIR="$HOME/ai-content-machine"
+
+          # Clone or update the repo
+          if [ ! -d "$APP_DIR/.git" ]; then
+            echo "Repository not found, cloning..."
+            git clone "$REPO_SSH" "$APP_DIR"
+          else
+            echo "Repository exists, pulling latest changes..."
+            cd "$APP_DIR"
+            git remote set-url origin "$REPO_SSH"
+            git fetch origin
+            git reset --hard origin/main
+          fi
+
+          cd "$APP_DIR"
+
+          # Ensure .env exists on the server (created manually on first deploy).
+          # See .env.production.example for the variables this app expects.
+          if [ ! -f .env ]; then
+            echo "ERROR: .env not found on server. Copy .env.production.example to .env and fill in secrets." >&2
+            exit 1
+          fi
+
+          # Rolling update with minimal downtime
+          sudo docker compose --profile prod down --remove-orphans
+
+          # Build with cache to keep deploys fast; force-rebuild via workflow_dispatch if needed.
+          sudo docker compose --profile prod build
+
+          sudo docker compose --profile prod up -d
+
+          # Clean up old dangling images (keep tagged ones)
+          sudo docker image prune -f --filter "until=24h"
