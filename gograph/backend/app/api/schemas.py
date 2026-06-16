@@ -1,8 +1,10 @@
 """Pydantic request/response schemas for the GoGraph API."""
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Generic, Optional, TypeVar
 
 from pydantic import BaseModel, Field
+
+RowT = TypeVar("RowT", bound=BaseModel)
 
 
 class ModelRunCreateRequest(BaseModel):
@@ -36,10 +38,16 @@ class ModelRunOverviewResponse(BaseModel):
     funnel_model_active: Optional[bool] = None
 
 
-class TableResponse(BaseModel):
+class TableResponse(BaseModel, Generic[RowT]):
+    """Generic wrapper for endpoints returning a list of typed rows.
+
+    Each endpoint declares `response_model=TableResponse[XRow]` where
+    `XRow` is a Pydantic model defined in `api.row_schemas`.
+    """
+
     model_run_id: int
     table: str
-    rows: list[dict[str, Any]] = Field(default_factory=list)
+    rows: list[RowT] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
