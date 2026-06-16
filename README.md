@@ -77,6 +77,38 @@ python run_quarter.py
 
 Os arquivos são gerados em `results/`.
 
+## Running with Docker
+
+Dev mode (hot reload — uvicorn `--reload` + Vite HMR):
+
+```bash
+docker compose --profile dev up
+# → frontend: http://localhost:5173
+# → backend:  http://localhost:8000
+```
+
+Prod-like build (nginx serves `dist/` + proxies `/api` to backend):
+
+```bash
+docker compose --profile prod up --build
+# → http://localhost
+```
+
+With Postgres (Block 5 — não habilitado por padrão):
+
+```bash
+docker compose --profile dev --profile pg up
+```
+
+Rodar testes dentro dos containers:
+
+```bash
+docker compose --profile dev run --rm backend-dev pytest -q
+docker compose --profile dev run --rm frontend-dev npm test
+```
+
+O fluxo `./dev.sh` continua disponível para dev nativo (sem Docker).
+
 ## Outputs
 
 O Excel final inclui:
