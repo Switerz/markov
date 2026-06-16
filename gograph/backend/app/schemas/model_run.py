@@ -58,6 +58,8 @@ class ModelRunResult:
     raw_shapley_results: Optional[pd.DataFrame] = None
     # True when funnel_channel_attribution replaced markov_results/shapley_results as primary
     funnel_model_active: bool = False
+    # Sprint 18 — Session quality metrics per channel (None if extraction failed)
+    session_quality: Optional[pd.DataFrame] = None
 
     def summary(self) -> Dict[str, Any]:
         return {

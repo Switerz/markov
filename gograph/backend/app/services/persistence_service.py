@@ -22,6 +22,7 @@ from gograph.backend.app.db.models import (
     ModelRun,
     PathSummary,
     SequentialEffect,
+    SessionQuality,
     TransitionCount,
     TransitionMatrixEntry,
 )
@@ -138,6 +139,8 @@ def save_model_run(
         _save_funnel_state_attribution(session, model_run.id, result.funnel_state_attribution)
     if result.sequential_effects is not None and not result.sequential_effects.empty:
         _save_sequential_effects(session, model_run.id, result.sequential_effects)
+    if result.session_quality is not None and not result.session_quality.empty:
+        _save_session_quality(session, model_run.id, result.session_quality)
 
     return model_run.id
 
@@ -240,6 +243,7 @@ def get_model_run_table(
         "loop_diagnostics": LoopDiagnostic,
         "funnel_state_attribution": FunnelStateAttribution,
         "sequential_effects": SequentialEffect,
+        "session_quality": SessionQuality,
     }
     model = model_by_table.get(table_name)
     if model is None:
@@ -268,6 +272,7 @@ def clear_database(database_url: str | None = None) -> None:
             LoopDiagnostic,
             FunnelStateAttribution,
             SequentialEffect,
+            SessionQuality,
             ModelRun,
         ]
         for model in models:
@@ -338,6 +343,8 @@ def _save_attribution_results(
                 spend=_row_value(row, "spend"),
                 roas_markov=_row_value(row, "roas_markov"),
                 roas_shapley=_row_value(row, "roas_shapley"),
+                pfc_weight=_row_value(row, "pfc_weight"),
+                pfc_delta_pp=_row_value(row, "pfc_delta_pp"),
                 recommendation=_row_value(row, "recommendation"),
                 confidence_score=_row_value(row, "confidence_score"),
             )
@@ -520,6 +527,30 @@ def _save_sequential_effects(
         )
 
 
+def _save_session_quality(
+    session: Session,
+    model_run_id: int,
+    df: pd.DataFrame,
+) -> None:
+    for row in _df_records(df):
+        session.add(
+            SessionQuality(
+                model_run_id=model_run_id,
+                channel=str(_row_value(row, "channel")),
+                sessions=_row_value(row, "sessions"),
+                avg_duration_s=_row_value(row, "avg_duration_s"),
+                avg_pageviews=_row_value(row, "avg_pageviews"),
+                avg_bounce_rate=_row_value(row, "avg_bounce_rate"),
+                avg_events=_row_value(row, "avg_events"),
+                conv_sessions=_row_value(row, "conv_sessions"),
+                conv_avg_duration_s=_row_value(row, "conv_avg_duration_s"),
+                conv_avg_bounce_rate=_row_value(row, "conv_avg_bounce_rate"),
+                nonconv_avg_duration_s=_row_value(row, "nonconv_avg_duration_s"),
+                nonconv_avg_bounce_rate=_row_value(row, "nonconv_avg_bounce_rate"),
+            )
+        )
+
+
 def register_export(
     model_run_id: int,
     export_type: str,
@@ -577,6 +608,7 @@ def _clear_model_run_children(session: Session, model_run_id: int) -> None:
         LoopDiagnostic,
         FunnelStateAttribution,
         SequentialEffect,
+        SessionQuality,
     ]:
         rows = session.execute(
             select(model).where(model.model_run_id == model_run_id)

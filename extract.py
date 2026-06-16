@@ -13,44 +13,14 @@ SPECIAL_STATES = {"Conversion", "Non-Conversion", "(start)"}
 ALL_STATES = TRACKED_STATES | SPECIAL_STATES
 
 
-def _run_query(database_id: int, sql: str, no_limit: bool = False) -> pd.DataFrame:
-    """Execute native SQL against Metabase and return a DataFrame.
-
-    no_limit=True routes to /api/dataset/json which bypasses the 2000-row cap
-    that /api/dataset applies regardless of middleware flags. Use for raw_paths
-    and state-expansion extractions where the full universe matters.
-    """
+def _run_query(database_id: int, sql: str) -> pd.DataFrame:
+    """Execute native SQL against Metabase and return a DataFrame."""
     if not METABASE_URL or not METABASE_API_KEY:
         raise RuntimeError(
             "METABASE_URL and METABASE_API_KEY must be set in the environment. "
             "See .env.example for the required variables."
         )
 
-    query_body = {
-        "type": "native",
-        "native": {"query": sql, "template-tags": {}},
-        "database": database_id,
-        "parameters": [],
-    }
-
-    if no_limit:
-        # Export endpoint — returns a plain JSON array of row dicts, no cap.
-        import json as _json
-        resp = requests.post(
-            f"{METABASE_URL}/api/dataset/json",
-            headers={"x-api-key": METABASE_API_KEY},
-            data={"query": _json.dumps(query_body)},
-            timeout=600,
-        )
-        resp.raise_for_status()
-        rows = resp.json()
-        if isinstance(rows, dict) and (rows.get("status") == "failed" or rows.get("error")):
-            error = rows.get("error") or (rows.get("via") or [{}])[-1].get("error", "unknown")
-            raise RuntimeError(f"Query failed: {error}")
-        return pd.DataFrame(rows)
-
-    # Standard interactive endpoint — capped at 2000 rows for unaggregated,
-    # 10000 for aggregated. Fine for transitions/spend.
     resp = requests.post(
         f"{METABASE_URL}/api/dataset",
         headers={
@@ -58,7 +28,10 @@ def _run_query(database_id: int, sql: str, no_limit: bool = False) -> pd.DataFra
             "x-api-key": METABASE_API_KEY,
         },
         json={
-            **query_body,
+            "type": "native",
+            "native": {"query": sql, "template-tags": {}},
+            "database": database_id,
+            "parameters": [],
             "middleware": {
                 "js-int-to-string?": True,
                 "userland-query?": True,
@@ -87,25 +60,31 @@ def _ensure_tracked(state: str) -> str:
 def _state_sql(alias: str) -> str:
     """
     Returns a ClickHouse multiIf(...) expression that classifies a session into
-    a Markov state using utm_medium + utm_source only, with fallback to
+    a Markov state using utm_medium + utm_source + utm_campaign, with fallback to
     acquisition_channel for untagged sessions.
-    utm_campaign is intentionally excluded — naming conventions are inconsistent
-    and all Google CPC types share medium=cpc / source=google.
+    Google Ads is split into 4 sub-types via utm_campaign prefix patterns,
+    mirroring the channel_type field in raw.gogroup_google_ads (DB 63).
     """
     m = f"{alias}.utm_medium"
     s = f"{alias}.utm_source"
+    c = f"{alias}.utm_campaign"
     a = f"{alias}.acquisition_channel"
     return (
         "multiIf(\n"
         f"        ({m} IN ('paid_social','paid')) AND ({s} IN ('facebook','fb','whatsapp','facebook-sitelink','instagram','ig')), 'Paid Meta Ads',\n"
-        f"        {m} = 'cpc' AND {s} = 'google',                                   'Google Ads',\n"
+        f"        ({m} IN ('paid_social','paid')) AND {s} = 'tiktok',               'TikTok Ads',\n"
+        f"        {m} = 'cpc' AND {s} = 'google' AND startsWith({c}, 'pmax-'),      'Google Ads / PMax',\n"
+        f"        {m} = 'cpc' AND {s} = 'google' AND (startsWith({c}, 'shopping-') OR {c} = 'inst_shopping') AND positionCaseInsensitive({c}, 'inst') > 0, 'Google Ads / Shopping / Inst',\n"
+        f"        {m} = 'cpc' AND {s} = 'google' AND (startsWith({c}, 'shopping-') OR {c} = 'inst_shopping'), 'Google Ads / Shopping',\n"
+        f"        {m} = 'cpc' AND {s} = 'google' AND (startsWith({c}, '_s_') OR {c} = 'inst_geral') AND positionCaseInsensitive({c}, 'inst') > 0, 'Google Ads / Search / Inst',\n"
+        f"        {m} = 'cpc' AND {s} = 'google' AND (startsWith({c}, '_s_') OR {c} = 'inst_geral'), 'Google Ads / Search',\n"
+        f"        {m} = 'cpc' AND {s} = 'google',                                   'Google Ads / Other',\n"
         f"        {m} IN ('display','retargeting') AND {s} IN ('criteo','rtbhouse'), 'Display / Retargeting',\n"
         f"        {m} IN ('newsletter_email','automatic_email','architect_email','email','automatic_webpush','web_push'), 'Email',\n"
         f"        {m} IN ('automatic_whatsapp','newsletter_whatsapp') OR ({m} = 'paid_social' AND {s} = 'automatic_whatsapp'), 'WhatsApp CRM',\n"
         f"        {m} IN ('newsletter_sms','automatic_sms') OR ({m} = 'paid_social' AND {s} IN ('sms','automatic_sms')), 'SMS',\n"
         f"        {m} IN ('organic_social','organic_live','organic_broadcast') AND {s} = 'instagram', 'Organic Social / Instagram',\n"
         f"        {m} = 'organic_social' AND {s} = 'facebook',                      'Organic Social / Facebook',\n"
-        f"        {m} = 'influencers',                                               'Influencers',\n"
         f"        {m} = 'clube_gocase',                                              'Clube GoCase',\n"
         f"        {m} IN ('network_affiliates','network_parcerias','referral'),      'Referral',\n"
         f"        {a} = 'Direct',          'Direct',\n"
@@ -116,12 +95,7 @@ def _state_sql(alias: str) -> str:
     )
 
 
-def _raw_paths_sql(
-    start_date: str,
-    end_date: str,
-    lookback: int,
-    nonconv_sample_pct: int = 100,
-) -> str:
+def _raw_paths_sql(start_date: str, end_date: str, lookback: int) -> str:
     """
     SQL to extract full user-level path sequences for Sprint 7 path analysis.
 
@@ -129,10 +103,8 @@ def _raw_paths_sql(
     are included. This prevents post-purchase CRM messages (WhatsApp confirmations,
     shipping updates) from inflating single-channel converting paths.
 
-    Non-converting paths: sessions in the analysis window for users who made
-    no purchase. `nonconv_sample_pct` (1-100) downsamples non-converting users
-    deterministically via cityHash64 — required for full extractions to avoid
-    ClickHouse OOM on multi-million user windows.
+    Non-converting paths: all sessions in the analysis window for users who made
+    no purchase.
     """
     state_expr = _state_sql("s_all")
     return f"""
@@ -199,7 +171,6 @@ def _raw_paths_sql(
               AND arrayElement(entry_meta.value, indexOf(entry_meta.key, 'user_pseudo_id')) != ''
         ) AS s_all
         WHERE s_all.upid NOT IN (SELECT user_pseudo_id FROM purchase_info)
-          AND cityHash64(s_all.upid) % 100 < {nonconv_sample_pct}
         GROUP BY s_all.upid
     )
     SELECT path_sequence, converted, sum(revenue) AS revenue, count() AS occurrences
@@ -216,23 +187,11 @@ def get_raw_paths(
     database_id: int,
     start_date: str,
     end_date: str,
-    lookback: int = 30,
-    no_limit: bool = False,
-    nonconv_sample_pct: int = 100,
+    lookback: int = 30
 ) -> pd.DataFrame:
-    """Returns aggregated path sequences for Path Intelligence (Sprint 7).
-
-    no_limit=True bypasses Metabase's default 2000-row cap (routes to
-    /api/dataset/json). Required for state-expansion models where rare
-    path patterns matter.
-
-    nonconv_sample_pct in [1, 100] downsamples non-converting users to keep
-    the GROUP BY tractable in ClickHouse. The legacy default 100 preserves
-    backward compatibility; pass NON_CONV_SAMPLE_PCT (typically 1-5) when
-    doing full extractions of large windows.
-    """
-    sql = _raw_paths_sql(start_date, end_date, lookback, nonconv_sample_pct)
-    return _run_query(database_id, sql, no_limit=no_limit)
+    """Returns aggregated path sequences for Path Intelligence (Sprint 7)."""
+    sql = _raw_paths_sql(start_date, end_date, lookback)
+    return _run_query(database_id, sql)
 
 
 # ---------------------------------------------------------------------------
@@ -615,11 +574,19 @@ def get_total_revenue(
 
 GOOGLE_COST_SQL = """
 SELECT
-    'Google Ads' AS channel,
+    CASE
+        WHEN channel_type = 'SEARCH'          AND lower(campaign_name) LIKE '%inst%' THEN 'Google Ads / Search / Inst'
+        WHEN channel_type = 'SEARCH'                                                  THEN 'Google Ads / Search'
+        WHEN channel_type = 'SHOPPING'        AND lower(campaign_name) LIKE '%inst%' THEN 'Google Ads / Shopping / Inst'
+        WHEN channel_type = 'SHOPPING'                                                THEN 'Google Ads / Shopping'
+        WHEN channel_type = 'PERFORMANCE_MAX'                                         THEN 'Google Ads / PMax'
+        ELSE                                                                               'Google Ads / Other'
+    END AS channel,
     sum(cost) AS spend
 FROM raw.gogroup_google_ads
 WHERE company = 'Gocase'
   AND date BETWEEN '{start_date}' AND '{end_date}'
+GROUP BY 1
 """
 
 # Meta spend is at account level (no FB/IG platform split available).
@@ -832,6 +799,23 @@ ORDER BY occurrences DESC
 """
 
 
+_FUNNEL_BATCH_THRESHOLD_DAYS = 35
+
+
+def _funnel_months_in_range(start_date: str, end_date: str) -> list[tuple[str, str]]:
+    import calendar
+    from datetime import date as _d, timedelta
+    cursor = _d.fromisoformat(start_date)
+    end = _d.fromisoformat(end_date)
+    months = []
+    while cursor <= end:
+        last_day = calendar.monthrange(cursor.year, cursor.month)[1]
+        month_end = min(_d(cursor.year, cursor.month, last_day), end)
+        months.append((str(cursor), str(month_end)))
+        cursor = month_end + timedelta(days=1)
+    return months
+
+
 def get_funnel_enriched_paths(
     database_id: int,
     start_date: str,
@@ -841,9 +825,30 @@ def get_funnel_enriched_paths(
     """
     Returns path sequences where each touch is labeled 'channel / funnel_stage'.
     Used to build the Funnel Stage Markov/Shapley model (Sprint 13).
-    Falls back to an empty DataFrame on any query failure.
+
+    Auto-batches by month when the window exceeds _FUNNEL_BATCH_THRESHOLD_DAYS
+    to avoid ClickHouse OOM on multi-month runs.
+
     Columns: path_sequence, converted, revenue, occurrences
     """
+    from datetime import date as _d
+    start = _d.fromisoformat(start_date)
+    end = _d.fromisoformat(end_date)
+    if (end - start).days + 1 > _FUNNEL_BATCH_THRESHOLD_DAYS:
+        batches = []
+        for m_start, m_end in _funnel_months_in_range(start_date, end_date):
+            batch = get_funnel_enriched_paths(database_id, m_start, m_end, lookback)
+            if not batch.empty:
+                batches.append(batch)
+        if not batches:
+            return pd.DataFrame(columns=["path_sequence", "converted", "revenue", "occurrences"])
+        combined = pd.concat(batches, ignore_index=True)
+        return (
+            combined
+            .groupby(["path_sequence", "converted"], as_index=False)
+            .agg(revenue=("revenue", "sum"), occurrences=("occurrences", "sum"))
+        )
+
     sql = _funnel_enriched_paths_sql(start_date, end_date, lookback)
     df = _run_query(database_id, sql)
     if "path_sequence" not in df.columns:
@@ -854,17 +859,98 @@ def get_funnel_enriched_paths(
     return df
 
 
+# ---------------------------------------------------------------------------
+# Session quality (duration, pageviews, bounce, events) per channel
+# ---------------------------------------------------------------------------
+
+def _session_quality_sql(start_date: str, end_date: str) -> str:
+    """
+    Per-channel session quality metrics from sessions_v2.
+
+    Converting vs non-converting split uses user_pseudo_id from entry_meta.
+    Sessions without user_pseudo_id are counted only in overall totals.
+    Minimum 100 sessions per channel to filter noise.
+    """
+    state_expr = _state_sql("s")
+    return f"""
+WITH purchase_users AS (
+    SELECT DISTINCT user_pseudo_id
+    FROM analytics.purchases_dedup_lm_v2 FINAL
+    WHERE purchase_date BETWEEN '{start_date}' AND '{end_date}'
+      AND user_pseudo_id != ''
+)
+SELECT
+    {state_expr}                                                                                        AS channel,
+    count()                                                                                             AS sessions,
+    round(avg(s.duration), 1)                                                                           AS avg_duration_s,
+    round(avg(s.pageviews), 2)                                                                          AS avg_pageviews,
+    round(avg(toFloat64(s.is_bounce)), 4)                                                               AS avg_bounce_rate,
+    round(avg(s.events), 2)                                                                             AS avg_events,
+    countIf(s.upid != '' AND s.upid IN (SELECT user_pseudo_id FROM purchase_users))                     AS conv_sessions,
+    round(avgIf(s.duration,         s.upid != '' AND s.upid IN (SELECT user_pseudo_id FROM purchase_users)), 1) AS conv_avg_duration_s,
+    round(avgIf(toFloat64(s.is_bounce), s.upid != '' AND s.upid IN (SELECT user_pseudo_id FROM purchase_users)), 4) AS conv_avg_bounce_rate,
+    round(avgIf(s.duration,         s.upid =  '' OR  s.upid NOT IN (SELECT user_pseudo_id FROM purchase_users)), 1) AS nonconv_avg_duration_s,
+    round(avgIf(toFloat64(s.is_bounce), s.upid =  '' OR  s.upid NOT IN (SELECT user_pseudo_id FROM purchase_users)), 4) AS nonconv_avg_bounce_rate
+FROM (
+    SELECT
+        utm_medium, utm_source, utm_campaign, acquisition_channel,
+        duration, pageviews, is_bounce, events,
+        arrayElement(entry_meta.value, indexOf(entry_meta.key, 'user_pseudo_id')) AS upid
+    FROM plausible_events_db.sessions_v2 FINAL
+    WHERE `start` BETWEEN '{start_date}' AND '{end_date}'
+      AND (utm_medium != '' OR acquisition_channel != '')
+) AS s
+GROUP BY 1
+HAVING sessions >= 100
+ORDER BY sessions DESC
+"""
+
+
+def get_session_quality(
+    database_id: int,
+    start_date: str,
+    end_date: str,
+) -> pd.DataFrame:
+    """
+    Returns per-channel session quality metrics for the analysis window.
+
+    Columns: channel, sessions, avg_duration_s, avg_pageviews, avg_bounce_rate,
+             avg_events, conv_sessions, conv_avg_duration_s, conv_avg_bounce_rate,
+             nonconv_avg_duration_s, nonconv_avg_bounce_rate
+    """
+    sql = _session_quality_sql(start_date, end_date)
+    df = _run_query(database_id, sql)
+    if df.empty or "channel" not in df.columns:
+        return pd.DataFrame()
+    df["channel"] = df["channel"].apply(_ensure_tracked)
+    for col in ["sessions", "conv_sessions"]:
+        if col in df.columns:
+            df[col] = df[col].astype(int)
+    for col in ["avg_duration_s", "avg_pageviews", "avg_bounce_rate", "avg_events",
+                "conv_avg_duration_s", "conv_avg_bounce_rate",
+                "nonconv_avg_duration_s", "nonconv_avg_bounce_rate"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df
+
+
+EMAIL_MONTHLY_SPEND = 145_000.0
+TIKTOK_MONTHLY_SPEND = 30_000.0
+
+
 def get_channel_spend(
     db_datamart: int,
     start_date: str,
     end_date: str,
 ) -> pd.DataFrame:
     """
-    Returns spend per channel from Google Ads, Meta, SMS and WhatsApp CRM.
+    Returns spend per channel from Google Ads, Meta, SMS, WhatsApp CRM and Email.
     SMS and WhatsApp CRM are derived from Insider send counts × fixed unit costs
     (R$0.04/msg and R$0.40/msg respectively).
+    Email is a fixed monthly budget (EMAIL_MONTHLY_SPEND) prorated by window length.
     Columns: channel, spend
     """
+    from datetime import date as _date
     google = _run_query(
         db_datamart,
         GOOGLE_COST_SQL.format(start_date=start_date, end_date=end_date),
@@ -889,6 +975,10 @@ def get_channel_spend(
     )
     wpp["spend"] = wpp["spend"].astype(float)
 
-    spend = pd.concat([google, meta, sms, wpp], ignore_index=True)
+    days = (_date.fromisoformat(end_date) - _date.fromisoformat(start_date)).days + 1
+    email = pd.DataFrame([{"channel": "Email", "spend": EMAIL_MONTHLY_SPEND * days / 30.0}])
+    tiktok = pd.DataFrame([{"channel": "TikTok Ads", "spend": TIKTOK_MONTHLY_SPEND * days / 30.0}])
+
+    spend = pd.concat([google, meta, sms, wpp, email, tiktok], ignore_index=True)
     spend = spend.groupby("channel", as_index=False).agg(spend=("spend", "sum"))
     return spend

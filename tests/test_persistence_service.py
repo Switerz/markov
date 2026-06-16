@@ -32,7 +32,7 @@ def _build_result():
         spend=spend,
         total_revenue=1000.0,
         observed_conversion_rate=0.5,
-        paid_channels={"Google Ads"},
+        paid_channels={"Google Ads / Search"},
     )
 
 
@@ -60,7 +60,7 @@ def test_save_and_read_model_run_with_sqlite(tmp_path):
     assert saved["id"] == model_run_id
     assert saved["total_revenue"] == 1000.0
     assert len(runs) == 1
-    assert {"Google Ads", "Email"}.issubset(set(attribution["channel"]))
+    assert {"Google Ads / Search", "Email"}.issubset(set(attribution["channel"]))
     assert {"converting", "nonconverting"}.issubset(set(transitions["transition_type"]))
 
 

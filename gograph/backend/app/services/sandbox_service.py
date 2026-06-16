@@ -254,10 +254,11 @@ def _analyze_path_channels(
     conv_from_last  = _conv_prob_eventually(path_channels[-1], matrix_df)
     composite       = path_to_last * conv_from_last
 
-    avg_ticket = _avg_ticket_from_transitions(transitions_df, model_total_rev) \
+    global_avg_ticket = _avg_ticket_from_transitions(transitions_df, model_total_rev) \
         or _avg_ticket_from_paths(paths_df, model_total_rev)
 
     historical_support, similar = _historical_support(path_channels, paths_df)
+    avg_ticket = _avg_ticket_from_similar(similar) or global_avg_ticket
     hist_conv_rate = _historical_conversion_rate(similar)
 
     expected_revenue = (
@@ -460,6 +461,13 @@ def _conv_prob_eventually(last_channel: str, matrix: pd.DataFrame) -> float:
     return min(conv_absorbed, 1.0)
 
 
+def _avg_ticket_from_similar(similar: list[dict]) -> float:
+    """Weighted avg ticket from similar historical paths (revenue / conversions)."""
+    total_rev  = sum(p["revenue"]          for p in similar if p.get("revenue"))
+    total_conv = sum(p["conversion_count"] for p in similar if p.get("conversion_count"))
+    return total_rev / total_conv if total_conv > 0 else 0.0
+
+
 def _avg_ticket_from_transitions(transitions_df: pd.DataFrame, model_total_rev: float) -> float:
     """
     Avg ticket = model_total_revenue / n_converting_sessions.
@@ -534,8 +542,10 @@ def _historical_support(
         similar.append({
             "path": str(r.get("path_text", "")),
             "count": int(r.get("count", 0)),
+            "conversion_count": int(r.get("conversion_count", 0)),
             "conversion_rate": _clean(r.get("conversion_rate")),
             "revenue": _clean(r.get("revenue")),
+            "avg_ticket": _clean(r.get("avg_ticket")),
         })
     return total, similar
 

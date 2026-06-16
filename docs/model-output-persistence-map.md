@@ -22,12 +22,16 @@ O contrato central esta em `gograph/backend/app/schemas/model_run.py`:
 - `markov_results`: pesos, receita e removal effect.
 - `shapley_results`: pesos e receita Shapley.
 - `roas_results`: canal, spend, receita atribuida, ROAS e recomendacao.
+- `pfc_weight` / `pfc_delta_pp`: sinal PFC integrado em `roas_results`
+  quando `raw_paths` esta disponivel.
 - `diagnostics`: papel do canal, presenca e posicao first/middle/last touch.
 - `top_paths`: caminhos, frequencia, conversao, receita, ticket e loops.
 - `data_quality`: checks de qualidade.
 - `loop_diagnostics`: diagnosticos de auto-loop por canal.
 - `funnel_state_attribution`: atribuicao por canal + etapa de funil.
 - `sequential_effects`: pares de canais e lift sequencial.
+- `session_quality`: metricas de engajamento por canal, quando a extracao de
+  qualidade de sessao esta disponivel.
 - `summary`: receita total, spend total, conversao observada/modelada e runtime.
 
 ## Lacuna atual
@@ -40,6 +44,8 @@ Hoje o backend salva parte desses outputs, mas ainda com formato de MVP:
   lineage.
 - Campos que a UI usa para recomendacao, impacto estimado e comparacao ainda
   existem so em mocks ou sao derivados de forma incompleta.
+- PFC e `session_quality` ja existem no backend atual, mas ainda precisam entrar
+  nos contratos agregados das telas.
 
 ## Tabelas propostas
 
@@ -165,6 +171,8 @@ Campos:
 - `last_click_revenue`
 - `first_click_roas`
 - `last_click_roas`
+- `pfc_weight`
+- `pfc_delta_pp`
 - `consensus_score`
 - `confidence_score`
 - `recommendation`
@@ -369,7 +377,33 @@ Uso:
 - Execucoes & Qualidade
 - Alertas tecnicos
 
-### 13. `scenarios`
+### 13. `session_quality`
+
+Metricas de qualidade de sessao por canal.
+
+Campos:
+
+- `model_run_id`
+- `channel`
+- `sessions`
+- `avg_duration_s`
+- `avg_pageviews`
+- `avg_bounce_rate`
+- `avg_events`
+- `conv_sessions`
+- `conv_avg_duration_s`
+- `conv_avg_bounce_rate`
+- `nonconv_avg_duration_s`
+- `nonconv_avg_bounce_rate`
+
+Uso:
+
+- Execucoes & Qualidade
+- Canal 360
+- Diagnostico de canais com muito volume e baixa qualidade
+- Validacao de funil e intent
+
+### 14. `scenarios`
 
 Definicao de cenario do sandbox/experimentos.
 
@@ -387,7 +421,7 @@ Campos:
 - `created_at`
 - `updated_at`
 
-### 14. `scenario_graph`
+### 15. `scenario_graph`
 
 Grafo salvo para o cenario.
 
@@ -398,7 +432,7 @@ Campos:
 - `edges_json`
 - `path_channels_json`
 
-### 15. `scenario_analysis`
+### 16. `scenario_analysis`
 
 Resultado calculado de um cenario.
 
@@ -432,6 +466,7 @@ Precisa de:
 - `model_run_summary`
 - `channel_metrics`
 - `channel_recommendations`
+- PFC via `channel_metrics.pfc_weight` e `channel_metrics.pfc_delta_pp`
 - `path_metrics`
 - `transition_edges`
 - `data_quality_checks`
@@ -455,6 +490,7 @@ Precisa de:
 - `channel_metrics`
 - `channel_recommendations`
 - `funnel_stage_metrics`
+- `session_quality`
 - `transition_edges`
 - `sequential_effects`
 - `path_metrics`
@@ -491,6 +527,7 @@ Precisa de:
 - `model_run_inputs`
 - `model_run_logs`
 - `data_quality_checks`
+- `session_quality`
 - `exports`
 
 ## Endpoints alvo
@@ -504,6 +541,7 @@ Precisa de:
 - `GET /model-runs/{id}/logs`
 - `GET /model-runs/{id}/inputs`
 - `GET /model-runs/{id}/quality`
+- `GET /model-runs/{id}/session-quality`
 
 ### Overview
 
@@ -563,4 +601,3 @@ Uma tela so deve ser considerada 100% funcional quando:
 - O endpoint retorna estados de vazio, loading e erro previsiveis.
 - Os campos usados no frontend existem em schema Pydantic dedicado.
 - A execucao pode ser auditada por inputs, parametros, logs e qualidade.
-
