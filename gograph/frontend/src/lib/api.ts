@@ -24,6 +24,7 @@ export type TableResponse<T = Record<string, unknown>> = {
 
 export type ChannelRow = {
   channel: string;
+  model_type?: string | null;
   markov_weight?: number | null;
   markov_revenue?: number | null;
   removal_effect?: number | null;
@@ -37,17 +38,26 @@ export type ChannelRow = {
   first_click_roas?: number | null;
   last_click_revenue?: number | null;
   last_click_roas?: number | null;
+  // PFC (Position-Frequency-Causal) — exposed via Block 1
+  // TODO(api): surface in Channel 360 UI (Block 2).
+  pfc_weight?: number | null;
+  pfc_delta_pp?: number | null;
   recommendation?: string | null;
+  confidence_score?: number | null;
 };
 
 export type DiagnosticRow = {
   channel: string;
   channel_role?: string | null;
+  touchpoint_role?: string | null;
   presence_converting?: number | null;
   presence_nonconverting?: number | null;
   first_touch_share?: number | null;
   middle_touch_share?: number | null;
   last_touch_share?: number | null;
+  assist_count?: number | null;
+  closer_count?: number | null;
+  starter_count?: number | null;
   markov_shapley_delta_pp?: number | null;
   diagnostic_label?: string | null;
   diagnostic_text?: string | null;
@@ -214,6 +224,32 @@ export type FunnelValidationRow = {
 // ---------------------------------------------------------------------------
 // Sprint 14 — Sequential Effects
 // ---------------------------------------------------------------------------
+
+export type TransitionRow = {
+  from_state: string;
+  to_state: string;
+  n?: number | null;
+  total_revenue?: number | null;
+  transition_type?: string | null;
+};
+
+// ---------------------------------------------------------------------------
+// Sprint 18 — Session Quality
+// ---------------------------------------------------------------------------
+
+export type SessionQualityRow = {
+  channel: string;
+  sessions?: number | null;
+  avg_duration_s?: number | null;
+  avg_pageviews?: number | null;
+  avg_bounce_rate?: number | null;
+  avg_events?: number | null;
+  conv_sessions?: number | null;
+  conv_avg_duration_s?: number | null;
+  conv_avg_bounce_rate?: number | null;
+  nonconv_avg_duration_s?: number | null;
+  nonconv_avg_bounce_rate?: number | null;
+};
 
 export type SequentialEffectRow = {
   previous_channel: string;
@@ -384,6 +420,10 @@ export const api = {
     request<TableResponse<SequentialEffectRow>>(
       `/model-runs/${id}/sequential-effects${prevChannel ? `?previous_channel=${encodeURIComponent(prevChannel)}` : ""}`
     ),
+  getTransitions: (id: number) =>
+    request<TableResponse<TransitionRow>>(`/model-runs/${id}/transitions`),
+  getSessionQuality: (id: number) =>
+    request<TableResponse<SessionQualityRow>>(`/model-runs/${id}/session-quality`),
   createRun: (payload: ModelRunCreatePayload) =>
     request<ModelRun>("/model-runs", {
       method: "POST",
