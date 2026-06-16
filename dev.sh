@@ -28,6 +28,6 @@ echo "[dev] API   → http://127.0.0.1:8000"
 echo "[dev] Front → http://127.0.0.1:5173"
 
 python -m uvicorn gograph.backend.app.main:app --reload --port 8000 &
-(cd gograph/frontend && npm run dev) &
+(cd gograph/frontend && npm run dev -- --host 127.0.0.1) &
 
 wait
