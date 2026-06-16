@@ -1,40 +1,42 @@
 name: gograph
 
+x-backend-base: &backend-base
+  build:
+    context: .
+    dockerfile: docker/backend/Dockerfile
+  image: gograph-backend:dev
+  env_file: .env
+  environment:
+    DATABASE_URL: ${DATABASE_URL:-sqlite:////app/db/gograph.db}
+    # CORS for frontend dev (vite at 5173 from host) — override via .env
+    CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost,http://127.0.0.1:5173}
+  volumes:
+    # Mount source for hot reload (used by both profiles; harmless in prod)
+    - ./gograph:/app/gograph
+    - ./config.py:/app/config.py
+    - ./extract.py:/app/extract.py
+    - ./markov.py:/app/markov.py
+    - ./roas.py:/app/roas.py
+    - ./run.py:/app/run.py
+    # SQLite file persistence (named volume — DB lives at /app/db/gograph.db)
+    - gograph_db:/app/db
+  ports:
+    - "8000:8000"
+  healthcheck:
+    test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+    interval: 5s
+    timeout: 3s
+    start_period: 15s
+    retries: 5
+
 services:
   backend:
-    build:
-      context: .
-      dockerfile: docker/backend/Dockerfile
-    image: gograph-backend:dev
+    <<: *backend-base
     container_name: gograph-backend
-    env_file: .env
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-sqlite:////app/db/gograph.db}
-      # CORS for frontend dev (vite at 5173 from host)
-      CORS_ORIGINS: "http://localhost:5173,http://localhost,http://127.0.0.1:5173"
-    volumes:
-      # Mount source for hot reload (dev only — prod profile overrides)
-      - ./gograph:/app/gograph
-      - ./config.py:/app/config.py
-      - ./extract.py:/app/extract.py
-      - ./markov.py:/app/markov.py
-      - ./roas.py:/app/roas.py
-      - ./run.py:/app/run.py
-      # SQLite file persistence (named volume — DB lives at /app/db/gograph.db)
-      - gograph_db:/app/db
-    ports:
-      - "8000:8000"
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
-      interval: 5s
-      timeout: 3s
-      start_period: 15s
-      retries: 5
     profiles: ["prod"]
 
   backend-dev:
-    extends:
-      service: backend
+    <<: *backend-base
     container_name: gograph-backend-dev
     command: ["python", "-m", "uvicorn", "gograph.backend.app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     profiles: ["dev"]
