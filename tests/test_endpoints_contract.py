@@ -30,9 +30,11 @@ from gograph.backend.app.services.persistence_service import save_model_run
 from tests.test_persistence_service import _build_result
 
 
-@pytest.fixture
-def client_and_run(tmp_path):
-    database_url = f"sqlite:///{tmp_path / 'contract_test.db'}"
+@pytest.fixture(scope="module")
+def client_and_run(tmp_path_factory):
+    """Build the test DB once for the whole module — _build_result is ~60s."""
+    db_path = tmp_path_factory.mktemp("contract") / "contract_test.db"
+    database_url = f"sqlite:///{db_path}"
     app = create_app(database_url=database_url)
     result = _build_result()
     model_run_id = save_model_run(result, database_url=database_url)
