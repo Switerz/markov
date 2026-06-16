@@ -1,7 +1,16 @@
 import { useMemo } from "react";
+import { useQueries } from "@tanstack/react-query";
 import { useRunsList } from "../../../app/hooks/useActiveRun";
-import type { ModelRun, ModelRunCreatePayload } from "../../../lib/api";
-import { formatCompactBRL, formatPercent } from "../../../shared/format";
+import {
+  api,
+  type DataQualityRow,
+  type ModelRun,
+  type ModelRunCreatePayload,
+  type ModelRunInputRow,
+  type ModelRunLogRow,
+  type ModelRunSummaryRow,
+} from "../../../lib/api";
+import { formatCompactBRL, formatNumber, formatPercent } from "../../../shared/format";
 import { executionsQualityMock } from "../executions-quality.mock";
 import type {
   ExecutionDetailsPanelData,
@@ -10,6 +19,14 @@ import type {
   ExecutionStatusTone,
   ExecutionsQualityData,
 } from "../types";
+
+type RunDetail = {
+  runId: number;
+  summary: ModelRunSummaryRow | null;
+  inputs: ModelRunInputRow[];
+  logs: ModelRunLogRow[];
+  dataQuality: DataQualityRow[];
+};
 
 export type UseExecutionsQualityData = ExecutionsQualityData & {
   runs: ModelRun[];
@@ -59,6 +76,13 @@ function formatRuntime(seconds: number): string {
   const minutes = Math.round((seconds % 3600) / 60);
   if (hours <= 0) return `${minutes}m`;
   return `${hours}h ${minutes.toString().padStart(2, "0")}m`;
+}
+
+function formatDuration(seconds?: number | null): string {
+  if (seconds == null || !Number.isFinite(seconds)) return "-";
+  if (seconds < 1) return `${Math.round(seconds * 1000)}ms`;
+  if (seconds < 60) return `${seconds.toFixed(1).replace(".", ",")}s`;
+  return formatRuntime(seconds);
 }
 
 function confidenceFor(run: ModelRun): ExecutionHistoryRow["confidenceBadge"] {
@@ -150,9 +174,13 @@ function defaultsForRun(run?: ModelRun): Partial<ModelRunCreatePayload> | undefi
   };
 }
 
-function detailsForRun(run?: ModelRun): ExecutionDetailsPanelData {
+function detailFor(details: RunDetail[], run?: ModelRun): RunDetail | undefined {
+  return run ? details.find((item) => item.runId === run.id) : undefined;
+}
+
+function detailsForRun(run?: ModelRun, detail?: RunDetail): ExecutionDetailsPanelData {
   if (!run) return executionsQualityMock.executionDetailsPanel;
-  const badge = confidenceFor(run) ?? "—";
+  const badge = (detail?.summary?.confidence_label as ExecutionDetailsPanelData["confidenceBox"]["title"]) ? detail?.summary?.confidence_label : confidenceFor(run) ?? "—";
   const params = defaultsForRun(run);
   return {
     ...executionsQualityMock.executionDetailsPanel,
@@ -172,18 +200,137 @@ function detailsForRun(run?: ModelRun): ExecutionDetailsPanelData {
       { label: "Modo de lote", value: String(params?.batch_mode ?? "-") },
       { label: "Dias por lote", value: String(params?.batch_days ?? "-") },
     ],
+    inputs: (detail?.inputs ?? []).map((input) => ({
+      source: input.source,
+      query: input.query_name,
+      rows: formatNumber(input.row_count),
+      period:
+        input.date_min && input.date_max
+          ? `${input.date_min} - ${input.date_max}`
+          : "-",
+      hash: input.data_hash.slice(0, 12),
+    })),
+    outputs: [
+      { label: "Canais", value: String(detail?.summary?.channel_count ?? "-") },
+      { label: "Estados", value: String(detail?.summary?.state_count ?? "-") },
+      { label: "Caminhos", value: String(detail?.summary?.path_count ?? "-") },
+      { label: "Transições", value: String(detail?.summary?.transition_count ?? "-") },
+    ],
+    logs: (detail?.logs ?? []).map((log) => ({
+      step: log.step,
+      status: log.status,
+      duration: formatDuration(log.duration_seconds),
+      message: log.message ?? "-",
+      createdAt: formatCreatedAt(log.created_at ?? null),
+    })),
     notes: {
       title: "Retorno da API",
-      value: run.error_message || "Execução carregada de /model-runs.",
+      value:
+        run.error_message ||
+        `${detail?.inputs.length ?? 0} entradas e ${detail?.logs.length ?? 0} logs carregados da API.`,
       action: "Atualizado",
     },
     confidenceBox: {
       title: `Confiança desta execução: ${badge}`,
       description:
-        run.observed_conversion_rate == null
+        detail?.summary
+          ? `Score ${formatPercent(detail.summary.confidence_score, 0)}; conversão modelada ${formatPercent(detail.summary.model_conversion_rate)} vs. observada ${
+              detail.summary.observed_conversion_rate == null
+                ? "-"
+                : formatPercent(detail.summary.observed_conversion_rate)
+            }.`
+          : run.observed_conversion_rate == null
           ? "A execução ainda não possui conversão observada para calcular confiança."
           : `Conversão modelada ${formatPercent(run.model_conversion_rate)} vs. observada ${formatPercent(run.observed_conversion_rate)}.`,
       action: "Ver detalhes técnicos",
+    },
+  };
+}
+
+async function loadRunDetail(runId: number): Promise<RunDetail> {
+  const [summary, inputs, logs, dataQuality] = await Promise.all([
+    api.getSummary(runId).catch(() => null),
+    api.getInputs(runId).catch(() => []),
+    api.getLogs(runId).catch(() => []),
+    api.getDataQuality(runId).then((res) => res.rows).catch(() => []),
+  ]);
+  return { runId, summary, inputs, logs, dataQuality };
+}
+
+function trustCenterFromDetail(run: ModelRun | undefined, detail: RunDetail | undefined) {
+  if (!run || !detail?.summary) return executionsQualityMock.trustCenter;
+  const summary = detail.summary;
+  const checks = detail.dataQuality;
+  const passed = checks.filter((check) => check.status === "pass").length;
+  const critical = checks.filter((check) =>
+    ["critical", "high"].includes((check.severity ?? "").toLowerCase()),
+  );
+  const calibration =
+    summary.observed_conversion_rate && summary.observed_conversion_rate > 0
+      ? Math.max(
+          0,
+          1 -
+            Math.abs(summary.model_conversion_rate - summary.observed_conversion_rate) /
+              summary.observed_conversion_rate,
+        )
+      : null;
+  const averageQuality =
+    checks.length > 0
+      ? checks.reduce((sum, check) => sum + (check.score ?? (check.status === "pass" ? 1 : 0.5)), 0) /
+        checks.length
+      : null;
+
+  return {
+    ...executionsQualityMock.trustCenter,
+    overallConfidence: {
+      value: formatPercent(summary.confidence_score, 0),
+      badge: summary.confidence_label as "Alta" | "Média" | "Baixa",
+      delta: "Execução atual",
+    },
+    modelCalibration: [
+      {
+        label: "Conversão modelada vs. observada",
+        value: calibration == null ? "-" : formatPercent(calibration, 0),
+      },
+      {
+        label: "Taxa modelada",
+        value: formatPercent(summary.model_conversion_rate),
+      },
+    ],
+    dataQuality: [
+      {
+        label: "Qualidade dos dados",
+        value: averageQuality == null ? "-" : formatPercent(averageQuality, 0),
+      },
+      {
+        label: "Entradas registradas",
+        value: String(detail.inputs.length),
+      },
+      {
+        label: "Linhas auditadas",
+        value: formatNumber(detail.inputs.reduce((sum, input) => sum + input.row_count, 0)),
+      },
+      ...checks.slice(0, 3).map((check) => ({
+        label: check.check_name,
+        value: check.score == null ? check.status : formatPercent(check.score, 0),
+      })),
+    ],
+    alerts: {
+      title: `Alertas críticos (${critical.length})`,
+      items:
+        critical.length > 0
+          ? critical.map((check) => check.recommendation || check.detail || check.check_name)
+          : ["Nenhum alerta crítico registrado para esta execução."],
+      action: "Ver todos os alertas",
+    },
+    checks: {
+      title: "Checks de qualidade",
+      value: `${passed}/${checks.length}`,
+      description:
+        checks.length > 0
+          ? `${passed} checks passaram; ${checks.length - passed} exigem atenção.`
+          : "Nenhum check de qualidade registrado.",
+      action: "Ver detalhes dos checks",
     },
   };
 }
@@ -192,6 +339,22 @@ export function useExecutionsQualityData(): UseExecutionsQualityData {
   const runsQuery = useRunsList();
   const runs = runsQuery.data ?? [];
   const hasApiRows = runs.length > 0;
+  const detailQueries = useQueries({
+    queries: runs.map((run) => ({
+      queryKey: ["executions-quality", "detail", run.id],
+      queryFn: () => loadRunDetail(run.id),
+      enabled: run.status === "completed",
+      staleTime: 30_000,
+    })),
+  });
+  const details = detailQueries
+    .map((query) => query.data)
+    .filter((detail): detail is RunDetail => detail != null);
+  const firstRun = runs[0];
+  const firstDetail = detailFor(details, firstRun);
+  const criticalCount = firstDetail?.dataQuality.filter((check) =>
+    ["critical", "high"].includes((check.severity ?? "").toLowerCase()),
+  ).length;
 
   return useMemo(() => {
     const base: ExecutionsQualityData = hasApiRows
@@ -200,24 +363,57 @@ export function useExecutionsQualityData(): UseExecutionsQualityData {
           summaryMetrics: executionsQualityMock.summaryMetrics.map((metric) =>
             metric.id === "totalExecutions"
               ? { ...metric, value: String(runs.length), delta: undefined }
+              : metric.id === "lastConfidence" && firstDetail?.summary
+                ? {
+                    ...metric,
+                    value: formatPercent(firstDetail.summary.confidence_score, 0),
+                    badge: firstDetail.summary.confidence_label,
+                    delta: undefined,
+                  }
+              : metric.id === "averageRuntime"
+                ? {
+                    ...metric,
+                    value: formatRuntime(
+                      runs.reduce((sum, run) => sum + (run.runtime_seconds || 0), 0) /
+                        Math.max(runs.length, 1),
+                    ),
+                    delta: undefined,
+                  }
+              : metric.id === "criticalAlerts" && criticalCount != null
+                ? { ...metric, value: String(criticalCount), subtitle: "Trust Center" }
               : metric,
           ),
           executionHistory: historyFromRuns(runs),
-          executionDetailsPanel: detailsForRun(runs[0]),
+          trustCenter: trustCenterFromDetail(firstRun, firstDetail),
+          executionDetailsPanel: detailsForRun(firstRun, firstDetail),
         }
       : executionsQualityMock;
 
     return {
       ...base,
       runs,
-      isLoading: runsQuery.isLoading,
+      isLoading: runsQuery.isLoading || detailQueries.some((query) => query.isLoading),
       isError: runsQuery.isError,
       errorMessage:
         runsQuery.error instanceof Error ? runsQuery.error.message : null,
       getDetailsForRun: (id?: string) =>
-        detailsForRun(runs.find((run) => String(run.id) === id)),
+        detailsForRun(
+          runs.find((run) => String(run.id) === id),
+          detailFor(details, runs.find((run) => String(run.id) === id)),
+        ),
       getDefaultsForRun: (id?: string) =>
         defaultsForRun(runs.find((run) => String(run.id) === id)),
     };
-  }, [hasApiRows, runs, runsQuery.error, runsQuery.isError, runsQuery.isLoading]);
+  }, [
+    criticalCount,
+    detailQueries,
+    details,
+    firstDetail,
+    firstRun,
+    hasApiRows,
+    runs,
+    runsQuery.error,
+    runsQuery.isError,
+    runsQuery.isLoading,
+  ]);
 }

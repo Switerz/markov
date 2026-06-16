@@ -68,6 +68,44 @@ export type DataQualityRow = {
   status: string;
   severity: string;
   detail?: string | null;
+  score?: number | null;
+  affected_rows?: number | null;
+  recommendation?: string | null;
+};
+
+export type ModelRunSummaryRow = {
+  observed_conversion_rate?: number | null;
+  model_conversion_rate: number;
+  total_revenue: number;
+  total_spend: number;
+  total_conversions: number;
+  total_nonconversions_sampled: number;
+  non_conv_scale?: number | null;
+  state_count: number;
+  channel_count: number;
+  path_count: number;
+  transition_count: number;
+  confidence_score: number;
+  confidence_label: string;
+};
+
+export type ModelRunInputRow = {
+  source: string;
+  database_id?: number | null;
+  query_name: string;
+  row_count: number;
+  date_min?: string | null;
+  date_max?: string | null;
+  data_hash: string;
+  extracted_at?: string | null;
+};
+
+export type ModelRunLogRow = {
+  step: string;
+  status: string;
+  message?: string | null;
+  duration_seconds?: number | null;
+  created_at?: string | null;
 };
 
 export type InsightRow = {
@@ -535,6 +573,12 @@ export const api = {
   getGraph: (id: number) => request<GraphResponse>(`/model-runs/${id}/graph`),
   getDataQuality: (id: number) =>
     request<TableResponse<DataQualityRow>>(`/model-runs/${id}/data-quality`),
+  getSummary: (id: number) =>
+    request<ModelRunSummaryRow>(`/model-runs/${id}/summary`),
+  getInputs: (id: number) =>
+    request<ModelRunInputRow[]>(`/model-runs/${id}/inputs`),
+  getLogs: (id: number) =>
+    request<ModelRunLogRow[]>(`/model-runs/${id}/logs`),
   getPaths: (id: number) =>
     request<TableResponse<PathRow>>(`/model-runs/${id}/paths`),
   getLoops: (id: number) =>

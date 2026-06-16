@@ -265,6 +265,29 @@ export const executionsQualityMock: ExecutionsQualityData = {
       { label: "Modelo de atribuição", value: "Shapley Value" },
       { label: "Versão do algoritmo", value: "v2026.05.31.01" },
     ],
+    inputs: [
+      {
+        source: "plausible",
+        query: "converting_transitions",
+        rows: "128.420",
+        period: "01 Abr — 30 Abr 2026",
+        hash: "mocked",
+      },
+    ],
+    outputs: [
+      { label: "Canais", value: "7" },
+      { label: "Estados", value: "12" },
+      { label: "Caminhos", value: "500" },
+    ],
+    logs: [
+      {
+        step: "extraction",
+        status: "success",
+        duration: "12s",
+        message: "Extração concluída",
+        createdAt: "30 Abr 2026, 08:24",
+      },
+    ],
     notes: {
       title: "Notas",
       value: "Execução mensal padrão.",

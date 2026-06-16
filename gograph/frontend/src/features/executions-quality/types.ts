@@ -101,6 +101,21 @@ export type ExecutionDetailsPanelData = {
   tabs: ExecutionDetailsTab[];
   activeTab: ExecutionDetailsTab;
   modelParameters: { label: string; value: string }[];
+  inputs: {
+    source: string;
+    query: string;
+    rows: string;
+    period: string;
+    hash: string;
+  }[];
+  outputs: { label: string; value: string }[];
+  logs: {
+    step: string;
+    status: string;
+    duration: string;
+    message: string;
+    createdAt: string;
+  }[];
   notes: { title: string; value: string; action: string };
   confidenceBox: { title: string; description: string; action: string };
   actions: TopBarAction[];
