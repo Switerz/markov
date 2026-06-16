@@ -361,6 +361,124 @@ export type ScenarioComparePayload = {
   include_top_path: boolean;
 };
 
+export type DashboardMetric = {
+  id: string;
+  label: string;
+  value: number | null;
+  delta?: { value: number | null; pct: number | null } | null;
+  tone: string;
+};
+
+export type DashboardRecommendation = {
+  channel: string;
+  recommendation: string;
+  recommendation_tone: string;
+  priority_rank: number;
+  rationale: string[];
+  risks: string[];
+  best_practices: string[];
+  suggested_budget_delta_pct?: number | null;
+  suggested_budget_delta_value?: number | null;
+  estimated_revenue_delta?: number | null;
+  estimated_roas_min?: number | null;
+  estimated_roas_max?: number | null;
+  saturation_score?: number | null;
+  confidence_score: number;
+};
+
+export type DashboardSummary = {
+  observed_conversion_rate?: number | null;
+  model_conversion_rate: number;
+  total_revenue: number;
+  total_spend: number;
+  total_conversions: number;
+  total_nonconversions_sampled: number;
+  confidence_score: number;
+  confidence_label: string;
+};
+
+export type OverviewDashboardResponse = {
+  meta: { run_id: number; compare_run_id?: number | null; generated_at: string };
+  summary: DashboardSummary;
+  metric_strip: DashboardMetric[];
+  priority_decisions: DashboardRecommendation[];
+  model_consensus: {
+    axes: { x: string; y: string };
+    points: Array<{
+      channel: string;
+      markov_weight_pct: number;
+      shapley_weight_pct: number;
+      spend: number;
+      revenue: number;
+      recommendation_tone?: string | null;
+    }>;
+  };
+  journey_summary: {
+    top_entries: Array<{ name: string; value: number }>;
+    top_assistants: Array<{ name: string; value: number }>;
+    top_closers: Array<{ name: string; value: number }>;
+    flow_stages: Array<{ name: string; value: number }>;
+  };
+  analysis_confidence: {
+    score: number;
+    label: string;
+    calibration_gap_pp?: number | null;
+    data_quality_score?: number | null;
+  };
+  footer_note: string;
+};
+
+export type BudgetDashboardResponse = {
+  meta: { run_id: number; compare_run_id?: number | null; generated_at: string };
+  summary_cards: Array<{
+    id: string;
+    label: string;
+    count: number;
+    estimated_revenue_delta: number;
+    tone: string;
+  }>;
+  allocation_matrix: Array<{
+    channel: string;
+    spend_share_pct: number;
+    revenue_share_pct: number;
+    revenue: number;
+    recommendation: string;
+    tone: string;
+  }>;
+  opportunities_and_risks: {
+    opportunities: DashboardRecommendation[];
+    risks: DashboardRecommendation[];
+  };
+  channels_table: Array<{
+    channel: string;
+    recommendation: string;
+    tone: string;
+    spend: number;
+    revenue: number;
+    roas_markov?: number | null;
+    roas_shapley?: number | null;
+    consensus_score: number;
+    role?: string | null;
+    presence_score: number;
+    suggested_budget_delta_pct?: number | null;
+    suggested_budget_delta_value?: number | null;
+    estimated_revenue_delta?: number | null;
+  }>;
+  selected_channel_drawer: {
+    channel: string;
+    recommendation: string;
+    tone: string;
+    rationale: string[];
+    risks: string[];
+    best_practices: string[];
+    suggested_budget_delta_pct?: number | null;
+    suggested_budget_delta_value?: number | null;
+    estimated_revenue_delta?: number | null;
+    estimated_roas_min?: number | null;
+    estimated_roas_max?: number | null;
+  } | null;
+};
+
 export type ModelRunCreatePayload = {
   start_date: string;
   end_date: string;
@@ -393,6 +511,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   listRuns: () => request<ModelRun[]>("/model-runs"),
   getOverview: (id: number) => request<ModelRun>(`/model-runs/${id}/overview`),
+  getOverviewDashboard: (id: number, compareId?: number) =>
+    request<OverviewDashboardResponse>(
+      `/model-runs/${id}/dashboard/overview${compareId ? `?compare_run_id=${compareId}` : ""}`,
+    ),
+  getBudgetDashboard: (id: number, compareId?: number, channel?: string) => {
+    const params = new URLSearchParams();
+    if (compareId) params.set("compare_run_id", String(compareId));
+    if (channel) params.set("channel", channel);
+    const qs = params.toString();
+    return request<BudgetDashboardResponse>(
+      `/model-runs/${id}/dashboard/budget${qs ? `?${qs}` : ""}`,
+    );
+  },
   getChannels: (id: number) =>
     request<TableResponse<ChannelRow>>(`/model-runs/${id}/channels`),
   getDiagnostics: (id: number) =>

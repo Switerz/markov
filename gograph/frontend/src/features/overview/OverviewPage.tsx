@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Download, Plus } from "lucide-react";
 import { TopBar } from "../../app/TopBar";
+import { useActiveRun } from "../../app/hooks/useActiveRun";
 import { Button, useToast } from "../../shared/ui";
 import { downloadCsv, todayIso } from "../../shared/format";
 import { NewRunDialog } from "../../app/dialogs/NewRunDialog";
@@ -15,9 +16,8 @@ import { useOverviewFilters } from "./hooks/useOverviewFilters";
 import styles from "./OverviewPage.module.css";
 
 export function OverviewPage() {
-  // TODO(api): when filters become functional, swap useOverviewData for an
-  // api-backed hook keyed on { account, period, compareWith, executionId }.
-  const data = useOverviewData();
+  const activeRun = useActiveRun();
+  const data = useOverviewData(activeRun?.id);
   const { filters, set } = useOverviewFilters();
   const toast = useToast();
   const [newRunOpen, setNewRunOpen] = useState(false);
