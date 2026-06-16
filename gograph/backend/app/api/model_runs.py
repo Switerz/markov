@@ -37,6 +37,8 @@ from gograph.backend.app.api.row_schemas import (
     FunnelValidationRow,
     InsightRow,
     LoopDiagnosticRow,
+    ModelRunInputRow,
+    ModelRunLogRow,
     ModelRunSummaryRow,
     PathRow,
     SequentialEffectRow,
@@ -57,6 +59,8 @@ from gograph.backend.app.db.models import (
     ChannelRecommendation,
     DataQualityCheck,
     ModelRun,
+    ModelRunInput,
+    ModelRunLog,
     ModelRunSummary,
     PathSummary,
     TransitionCount,
@@ -67,6 +71,7 @@ from gograph.backend.app.services.journey_insight_service import (
 )
 from gograph.backend.app.services.roas_service import compute_first_last_click_roas
 from gograph.backend.app.services.journey_graph_service import build_journey_graph
+from gograph.backend.app.services.log_service import run_logged_step
 from gograph.backend.app.services.model_service import run_model
 from gograph.backend.app.services.persistence_service import (
     create_pending_model_run,
@@ -375,6 +380,34 @@ def get_data_quality(
     session: Session = Depends(get_db_session),
 ) -> TableResponse[DataQualityRow]:
     return _typed_table_response(model_run_id, "data_quality_checks", session, DataQualityRow)
+
+
+@router.get("/{model_run_id}/inputs", response_model=list[ModelRunInputRow])
+def get_inputs(
+    model_run_id: int,
+    session: Session = Depends(get_db_session),
+) -> list[ModelRunInputRow]:
+    _ensure_run_exists(model_run_id, session)
+    rows = session.execute(
+        select(ModelRunInput)
+        .where(ModelRunInput.model_run_id == model_run_id)
+        .order_by(ModelRunInput.extracted_at.asc(), ModelRunInput.id.asc())
+    ).scalars().all()
+    return [ModelRunInputRow.model_validate(_orm_public_dict(row)) for row in rows]
+
+
+@router.get("/{model_run_id}/logs", response_model=list[ModelRunLogRow])
+def get_logs(
+    model_run_id: int,
+    session: Session = Depends(get_db_session),
+) -> list[ModelRunLogRow]:
+    _ensure_run_exists(model_run_id, session)
+    rows = session.execute(
+        select(ModelRunLog)
+        .where(ModelRunLog.model_run_id == model_run_id)
+        .order_by(ModelRunLog.created_at.asc(), ModelRunLog.id.asc())
+    ).scalars().all()
+    return [ModelRunLogRow.model_validate(_orm_public_dict(row)) for row in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -946,6 +979,16 @@ def _clean_row(row: dict) -> dict:
     return cleaned
 
 
+def _orm_public_dict(row: object) -> dict:
+    data = {}
+    for column in row.__table__.columns:  # type: ignore[attr-defined]
+        value = getattr(row, column.name)
+        if hasattr(value, "isoformat"):
+            value = value.isoformat()
+        data[column.name] = value
+    return data
+
+
 def _rows_to_models(records: list[dict], model: type[BaseModel]) -> list[BaseModel]:
     return [model.model_validate(_clean_row(r)) for r in records]
 
@@ -979,8 +1022,21 @@ def _run_model_in_background(
 ) -> None:
     try:
         mark_model_run_running(model_run_id, database_url=database_url)
-        result = run_model(params=params)
-        save_model_run(result, model_run_id=model_run_id, database_url=database_url)
+        result = run_model(
+            params=params,
+            model_run_id=model_run_id,
+            database_url=database_url,
+        )
+        run_logged_step(
+            database_url=database_url,
+            model_run_id=model_run_id,
+            step="persistence",
+            fn=lambda: save_model_run(
+                result,
+                model_run_id=model_run_id,
+                database_url=database_url,
+            ),
+        )
     except Exception as exc:
         mark_model_run_failed(
             model_run_id,

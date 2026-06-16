@@ -55,7 +55,7 @@ def test_create_model_run_endpoint_persists_result(monkeypatch, tmp_path):
     app = create_app(database_url=database_url)
     result = _build_result()
 
-    def fake_run_model(params):
+    def fake_run_model(params, **_kwargs):
         assert params.start_date == "2026-03-01"
         assert params.end_date == "2026-03-31"
         return result
