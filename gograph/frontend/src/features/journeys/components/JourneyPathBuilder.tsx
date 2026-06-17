@@ -44,8 +44,7 @@ const KNOWN_CHANNELS = [
 export type JourneyPathBuilderProps = {
   builder: JourneyBuilderData;
   /** When provided, "Simular caminho" persists a scenario via the API
-   * (createScenario → analyzeScenario) and renders real metrics. Falls back
-   * to the local mock simulation when null. */
+   * (createScenario → analyzeScenario) and renders real metrics. */
   runId?: number;
 };
 
@@ -127,10 +126,11 @@ export function JourneyPathBuilder({ builder, runId }: JourneyPathBuilderProps) 
   const onSimulate = useCallback(async () => {
     if (nodes.length < 2) return;
     if (runId == null) {
-      // Local fallback simulation (no active run): keep the mock metrics that
-      // useScenarioSimulation already produces below.
-      setLiveMetrics(null);
-      toast.push("Caminho simulado localmente", "blue");
+      toast.push("Selecione uma execução para simulação real", "blue");
+      return;
+    }
+    if (edges.length === 0) {
+      toast.push("Conecte pelo menos dois canais antes de simular", "orange");
       return;
     }
     setSimulating(true);
@@ -206,7 +206,9 @@ export function JourneyPathBuilder({ builder, runId }: JourneyPathBuilderProps) 
   const displayedDescription =
     liveMetrics != null
       ? `Resultado da execução (run #${runId})`
-      : sim.description;
+      : runId == null
+        ? "Selecione uma execução para simular caminhos com dados reais."
+        : sim.description;
 
   return (
     <Card className={styles.root}>
@@ -293,9 +295,13 @@ export function JourneyPathBuilder({ builder, runId }: JourneyPathBuilderProps) 
             size="sm"
             iconLeft={<Play size={14} aria-hidden />}
             onClick={onSimulate}
-            disabled={nodes.length < 2 || simulating}
+            disabled={runId == null || nodes.length < 2 || simulating}
           >
-            {simulating ? "Analisando…" : builder.primaryAction}
+            {runId == null
+              ? "Selecione uma execução"
+              : simulating
+                ? "Analisando…"
+                : builder.primaryAction}
           </Button>
           <Button
             variant="secondary"

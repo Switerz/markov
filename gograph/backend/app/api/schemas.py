@@ -3,7 +3,7 @@
 from datetime import date
 from typing import Any, Dict, Generic, Literal, Optional, TypeVar
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 RowT = TypeVar("RowT", bound=BaseModel)
 
@@ -90,19 +90,6 @@ class ScenarioCreateRequest(BaseModel):
     edges: list[SandboxEdge] = Field(default_factory=list)
     path_channels: list[str] = Field(default_factory=list)
 
-    @model_validator(mode="after")
-    def validate_action_payload(self):
-        if self.action_type == "removeChannel" and not self.channel:
-            raise ValueError("channel is required for removeChannel scenarios.")
-        if self.action_type == "reducePresence":
-            if not self.channel:
-                raise ValueError("channel is required for reducePresence scenarios.")
-            if self.intensity_pct is None:
-                raise ValueError("intensity_pct is required for reducePresence scenarios.")
-        if self.action_type == "path" and (not self.nodes or not self.edges):
-            raise ValueError("nodes and edges are required for path scenarios.")
-        return self
-
 
 class ScenarioUpdateRequest(BaseModel):
     name: Optional[str] = None
@@ -185,7 +172,7 @@ class ScenarioDelta(BaseModel):
     expected_revenue_delta: Optional[float]
     expected_revenue_pct: Optional[float]
     confidence_delta: Optional[float]
-    historical_support_delta: Optional[int]
+    historical_support_delta: Optional[float]
 
 
 class ScenarioCompareResponse(BaseModel):

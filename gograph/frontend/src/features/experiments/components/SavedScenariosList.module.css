@@ -47,14 +47,17 @@
   white-space: nowrap;
 }
 
-.meta,
-.version {
+.meta {
   color: var(--gg-text-secondary);
   font-size: var(--gg-text-sm);
 }
 
-.version {
-  color: var(--gg-text-tertiary);
+.versionBadge {
+  justify-content: flex-start;
+  width: fit-content;
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
 }
 
 .actions {

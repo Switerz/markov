@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -7,6 +7,7 @@ import {
   Activity,
   ChartNoAxesCombined,
   GitCompare,
+  Route,
   Play,
   Monitor,
   Calendar,
@@ -33,6 +34,7 @@ export type ScenarioBuilderFormProps = {
   builder: ScenarioBuilder;
   onApply: (values: ScenarioBuilderFormValues) => void | Promise<void>;
   loading?: boolean;
+  channelOptions?: string[];
 };
 
 const actionTypeIcons: Record<ScenarioActionType["id"], LucideIcon> = {
@@ -40,10 +42,10 @@ const actionTypeIcons: Record<ScenarioActionType["id"], LucideIcon> = {
   reducePresence: Activity,
   redistributeBudget: ChartNoAxesCombined,
   compareModels: GitCompare,
+  path: Route,
 };
 
-// Static option sets — in a real integration these come from the API.
-const CHANNEL_OPTIONS = [
+const FALLBACK_CHANNEL_OPTIONS = [
   "Display",
   "Meta Ads",
   "Google Ads",
@@ -51,12 +53,13 @@ const CHANNEL_OPTIONS = [
   "WhatsApp CRM",
   "Influencers",
 ];
-const ACTION_OPTIONS = [
-  "Remover canal",
-  "Reduzir presença",
-  "Redistribuir budget",
-  "Comparar modelos",
-];
+const ACTION_LABELS: Record<ScenarioActionType["id"], string> = {
+  removeChannel: "Remover canal",
+  reducePresence: "Reduzir presença",
+  redistributeBudget: "Redistribuir budget",
+  compareModels: "Comparar modelos",
+  path: "Simular caminho",
+};
 
 const schema = z.object({
   channel: z.string().min(1),
@@ -80,6 +83,7 @@ export function ScenarioBuilderForm({
   builder,
   onApply,
   loading,
+  channelOptions,
 }: ScenarioBuilderFormProps) {
   const channelField = findField(builder.fields, "channel");
   const actionField = findField(builder.fields, "action");
@@ -95,25 +99,46 @@ export function ScenarioBuilderForm({
   const [activeActionType, setActiveActionType] = useState<
     ScenarioActionType["id"]
   >(initialActionType);
+  const options =
+    channelOptions && channelOptions.length > 0
+      ? channelOptions
+      : FALLBACK_CHANNEL_OPTIONS;
 
   const defaults = useMemo<SchemaValues>(
     () => ({
-      channel: channelField?.value ?? CHANNEL_OPTIONS[0],
-      action: actionField?.value ?? ACTION_OPTIONS[0],
+      channel:
+        channelField?.value && options.includes(channelField.value)
+          ? channelField.value
+          : options[0],
+      action: ACTION_LABELS[initialActionType],
       intensity: intensityField?.value ?? 100,
       period: periodField?.value ?? "",
     }),
-    [channelField, actionField, intensityField, periodField],
+    [channelField, initialActionType, intensityField, options, periodField],
   );
 
   const {
     control,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<SchemaValues>({
     resolver: zodResolver(schema),
     defaultValues: defaults,
   });
+  const selectedChannel = watch("channel");
+
+  useEffect(() => {
+    if (!options.includes(selectedChannel)) {
+      setValue("channel", options[0]);
+    }
+  }, [options, selectedChannel, setValue]);
+
+  function selectActionType(actionType: ScenarioActionType["id"]) {
+    setActiveActionType(actionType);
+    setValue("action", ACTION_LABELS[actionType]);
+  }
 
   const onSubmit = handleSubmit(async (values) => {
     await onApply({ ...values, actionType: activeActionType });
@@ -140,7 +165,7 @@ export function ScenarioBuilderForm({
                     role="radio"
                     aria-checked={isActive}
                     className={`${styles.pill} ${isActive ? styles.pillActive : ""}`}
-                    onClick={() => setActiveActionType(at.id)}
+                    onClick={() => selectActionType(at.id)}
                   >
                     <Icon size={14} aria-hidden />
                     <span>{at.label}</span>
@@ -164,7 +189,7 @@ export function ScenarioBuilderForm({
                       ariaLabel={channelField.label}
                       icon={<Monitor size={14} aria-hidden />}
                     >
-                      {CHANNEL_OPTIONS.map((opt) => (
+                      {options.map((opt) => (
                         <Select.Item key={opt} value={opt}>
                           {opt}
                         </Select.Item>
@@ -184,12 +209,18 @@ export function ScenarioBuilderForm({
                   render={({ field }) => (
                     <Select
                       value={field.value}
-                      onValueChange={field.onChange}
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        const nextActionType = Object.entries(ACTION_LABELS).find(
+                          ([, label]) => label === value,
+                        )?.[0] as ScenarioActionType["id"] | undefined;
+                        if (nextActionType) setActiveActionType(nextActionType);
+                      }}
                       ariaLabel={actionField.label}
                     >
-                      {ACTION_OPTIONS.map((opt) => (
-                        <Select.Item key={opt} value={opt}>
-                          {opt}
+                      {builder.actionTypes.map((opt) => (
+                        <Select.Item key={opt.id} value={ACTION_LABELS[opt.id]}>
+                          {ACTION_LABELS[opt.id]}
                         </Select.Item>
                       ))}
                     </Select>

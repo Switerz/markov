@@ -22,6 +22,8 @@ from gograph.backend.app.services.persistence_service import (
     get_model_run_table,
 )
 
+_UNSET = object()
+
 
 # ---------------------------------------------------------------------------
 # CRUD
@@ -40,8 +42,16 @@ def create_scenario(
     intensity_pct: Optional[float] = None,
     period_start: Any = None,
     period_end: Any = None,
+    require_path_graph: bool = False,
 ) -> dict[str, Any]:
-    _validate_action_payload(action_type, channel, intensity_pct)
+    _validate_action_payload(
+        action_type,
+        channel,
+        intensity_pct,
+        nodes=nodes,
+        edges=edges,
+        require_path_graph=require_path_graph,
+    )
     scenario = Scenario(
         model_run_id=model_run_id,
         name=name,
@@ -93,32 +103,42 @@ def update_scenario(
     path_channels: Optional[list[str]],
     session: Session,
     action_type: Optional[str] = None,
-    channel: Optional[str] = None,
-    intensity_pct: Optional[float] = None,
-    period_start: Any = None,
-    period_end: Any = None,
+    channel: Any = _UNSET,
+    intensity_pct: Any = _UNSET,
+    period_start: Any = _UNSET,
+    period_end: Any = _UNSET,
+    require_path_graph: bool = False,
 ) -> Optional[dict[str, Any]]:
     row = session.get(Scenario, scenario_id)
     if row is None:
         return None
     graph = _ensure_graph(row, session)
     next_action_type = action_type or row.action_type
-    next_channel = channel if channel is not None else row.channel
-    next_intensity_pct = intensity_pct if intensity_pct is not None else row.intensity_pct
-    _validate_action_payload(next_action_type, next_channel, next_intensity_pct)
+    next_channel = channel if channel is not _UNSET else row.channel
+    next_intensity_pct = intensity_pct if intensity_pct is not _UNSET else row.intensity_pct
+    next_nodes = nodes if nodes is not None else _json_list(graph.nodes_json)
+    next_edges = edges if edges is not None else _json_list(graph.edges_json)
+    _validate_action_payload(
+        next_action_type,
+        next_channel,
+        next_intensity_pct,
+        nodes=next_nodes,
+        edges=next_edges,
+        require_path_graph=require_path_graph and next_action_type == "path",
+    )
     if name is not None:
         row.name = name
     if description is not None:
         row.description = description
     if action_type is not None:
         row.action_type = action_type
-    if channel is not None:
+    if channel is not _UNSET:
         row.channel = channel
-    if intensity_pct is not None:
+    if intensity_pct is not _UNSET:
         row.intensity_pct = intensity_pct
-    if period_start is not None:
+    if period_start is not _UNSET:
         row.period_start = period_start
-    if period_end is not None:
+    if period_end is not _UNSET:
         row.period_end = period_end
     if nodes is not None:
         graph.nodes_json = json.dumps(nodes)
@@ -444,6 +464,9 @@ def _validate_action_payload(
     action_type: str,
     channel: Optional[str],
     intensity_pct: Optional[float],
+    nodes: Optional[list[dict]] = None,
+    edges: Optional[list[dict]] = None,
+    require_path_graph: bool = False,
 ) -> None:
     allowed = {"removeChannel", "reducePresence", "redistributeBudget", "compareModels", "path"}
     if action_type not in allowed:
@@ -452,6 +475,8 @@ def _validate_action_payload(
         raise ValueError("channel é obrigatório para removeChannel.")
     if action_type == "reducePresence" and (not channel or intensity_pct is None):
         raise ValueError("channel e intensity_pct são obrigatórios para reducePresence.")
+    if action_type == "path" and require_path_graph and (not nodes or not edges):
+        raise ValueError("nodes e edges são obrigatórios para path.")
 
 
 def _ensure_graph(row: Scenario, session: Session) -> ScenarioGraph:

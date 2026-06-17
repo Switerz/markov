@@ -1,7 +1,6 @@
 """Scenario API: typed sandbox CRUD, analysis and comparison."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from gograph.backend.app.api.deps import get_db_session
@@ -14,6 +13,7 @@ from gograph.backend.app.api.schemas import (
     ScenarioUpdateRequest,
 )
 from gograph.backend.app.services.sandbox_service import (
+    _UNSET,
     analyze_scenario,
     compare_scenarios,
     create_scenario,
@@ -57,6 +57,7 @@ def create_for_run(
             intensity_pct=payload.intensity_pct,
             period_start=payload.period_start,
             period_end=payload.period_end,
+            require_path_graph=True,
             session=session,
         )
     except ValueError as exc:
@@ -88,10 +89,23 @@ def update(
             edges=edges,
             path_channels=payload.path_channels,
             action_type=payload.action_type,
-            channel=payload.channel,
-            intensity_pct=payload.intensity_pct,
-            period_start=payload.period_start,
-            period_end=payload.period_end,
+            channel=payload.channel if "channel" in payload.model_fields_set else _UNSET,
+            intensity_pct=(
+                payload.intensity_pct
+                if "intensity_pct" in payload.model_fields_set
+                else _UNSET
+            ),
+            period_start=(
+                payload.period_start
+                if "period_start" in payload.model_fields_set
+                else _UNSET
+            ),
+            period_end=(
+                payload.period_end
+                if "period_end" in payload.model_fields_set
+                else _UNSET
+            ),
+            require_path_graph=True,
             session=session,
         )
     except ValueError as exc:
@@ -138,62 +152,80 @@ def compare(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-# Legacy `/sandbox/*` aliases. Kept as 308 redirects for one release.
-@router.post("/sandbox/scenarios", include_in_schema=False)
-def legacy_create(payload: ScenarioCreateRequest):
+# Legacy `/sandbox/*` aliases. Kept functional for one release.
+@router.post(
+    "/sandbox/scenarios",
+    response_model=ScenarioResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
+)
+def legacy_create(
+    payload: ScenarioCreateRequest,
+    session: Session = Depends(get_db_session),
+):
     if payload.model_run_id is None:
         raise HTTPException(status_code=422, detail="model_run_id is required.")
-    return RedirectResponse(
-        url=f"/model-runs/{payload.model_run_id}/scenarios",
-        status_code=status.HTTP_308_PERMANENT_REDIRECT,
-    )
+    return create_for_run(payload.model_run_id, payload, session)
 
 
-@router.get("/sandbox/scenarios", include_in_schema=False)
-def legacy_list(model_run_id: int):
-    return RedirectResponse(
-        url=f"/model-runs/{model_run_id}/scenarios",
-        status_code=status.HTTP_308_PERMANENT_REDIRECT,
-    )
+@router.get(
+    "/sandbox/scenarios",
+    response_model=list[ScenarioResponse],
+    include_in_schema=False,
+)
+def legacy_list(model_run_id: int, session: Session = Depends(get_db_session)):
+    return list_by_run(model_run_id, session)
 
 
-@router.get("/sandbox/scenarios/{scenario_id}", include_in_schema=False)
-def legacy_get(scenario_id: int):
-    return RedirectResponse(
-        url=f"/scenarios/{scenario_id}",
-        status_code=status.HTTP_308_PERMANENT_REDIRECT,
-    )
+@router.get(
+    "/sandbox/scenarios/{scenario_id}",
+    response_model=ScenarioResponse,
+    include_in_schema=False,
+)
+def legacy_get(scenario_id: int, session: Session = Depends(get_db_session)):
+    return get(scenario_id, session)
 
 
-@router.put("/sandbox/scenarios/{scenario_id}", include_in_schema=False)
-def legacy_update(scenario_id: int):
-    return RedirectResponse(
-        url=f"/scenarios/{scenario_id}",
-        status_code=status.HTTP_308_PERMANENT_REDIRECT,
-    )
+@router.put(
+    "/sandbox/scenarios/{scenario_id}",
+    response_model=ScenarioResponse,
+    include_in_schema=False,
+)
+def legacy_update(
+    scenario_id: int,
+    payload: ScenarioUpdateRequest,
+    session: Session = Depends(get_db_session),
+):
+    return update(scenario_id, payload, session)
 
 
-@router.delete("/sandbox/scenarios/{scenario_id}", include_in_schema=False)
-def legacy_delete(scenario_id: int):
-    return RedirectResponse(
-        url=f"/scenarios/{scenario_id}",
-        status_code=status.HTTP_308_PERMANENT_REDIRECT,
-    )
+@router.delete(
+    "/sandbox/scenarios/{scenario_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    include_in_schema=False,
+)
+def legacy_delete(scenario_id: int, session: Session = Depends(get_db_session)):
+    return delete(scenario_id, session)
 
 
-@router.post("/sandbox/scenarios/{scenario_id}/analyze", include_in_schema=False)
-def legacy_analyze(scenario_id: int):
-    return RedirectResponse(
-        url=f"/scenarios/{scenario_id}/analyze",
-        status_code=status.HTTP_308_PERMANENT_REDIRECT,
-    )
+@router.post(
+    "/sandbox/scenarios/{scenario_id}/analyze",
+    response_model=ScenarioAnalysisResponse,
+    include_in_schema=False,
+)
+def legacy_analyze(scenario_id: int, session: Session = Depends(get_db_session)):
+    return analyze(scenario_id, session)
 
 
-@router.post("/sandbox/compare", include_in_schema=False)
-def legacy_compare(payload: ScenarioCompareRequest):
+@router.post(
+    "/sandbox/compare",
+    response_model=ScenarioCompareResponse,
+    include_in_schema=False,
+)
+def legacy_compare(
+    payload: ScenarioCompareRequest,
+    session: Session = Depends(get_db_session),
+):
     if payload.model_run_id is None:
         raise HTTPException(status_code=422, detail="model_run_id is required.")
-    return RedirectResponse(
-        url=f"/model-runs/{payload.model_run_id}/scenarios/compare",
-        status_code=status.HTTP_308_PERMANENT_REDIRECT,
-    )
+    return compare(payload.model_run_id, payload, session)

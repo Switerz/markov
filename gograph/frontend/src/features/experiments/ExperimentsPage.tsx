@@ -13,13 +13,15 @@ import { SavedScenariosList } from "./components/SavedScenariosList";
 import { useExperimentsData } from "./hooks/useExperimentsData";
 import {
   useAnalyzeScenario,
+  useChannelOptions,
   useCreateScenario,
   useDeleteScenario,
+  useScenarioCompare,
   useScenarios,
 } from "./hooks/useScenarios";
 import { useActiveRun } from "../../app/hooks/useActiveRun";
 import { downloadCsv, formatCompactBRL, formatPercent, todayIso } from "../../shared/format";
-import type { ModelRun, Scenario } from "../../lib/api";
+import type { ModelRun, Scenario, ScenarioCompareResponse } from "../../lib/api";
 import type { ScenarioComparisonTable as ScenarioComparisonTableData } from "./types";
 import styles from "./ExperimentsPage.module.css";
 
@@ -33,6 +35,7 @@ export function ExperimentsPage() {
   const activeRun = useActiveRun();
   const runId = activeRun?.id;
   const scenariosQuery = useScenarios(runId);
+  const channelOptionsQuery = useChannelOptions(runId);
   const createScenario = useCreateScenario(runId);
   const analyzeScenario = useAnalyzeScenario(runId);
   const deleteScenario = useDeleteScenario(runId);
@@ -43,9 +46,16 @@ export function ExperimentsPage() {
     useState<AppliedScenario | null>(null);
   const [busyScenarioId, setBusyScenarioId] = useState<number | null>(null);
   const savedScenarios = scenariosQuery.data ?? [];
+  const scenarioIds = savedScenarios.map((scenario) => scenario.id);
+  const compareQuery = useScenarioCompare(runId, scenarioIds);
   const scenarioComparisonTable =
     activeRun != null
-      ? buildScenarioComparisonTable(data.scenarioComparisonTable, savedScenarios, activeRun)
+      ? buildScenarioComparisonTable(
+          data.scenarioComparisonTable,
+          savedScenarios,
+          activeRun,
+          compareQuery.data,
+        )
       : data.scenarioComparisonTable;
 
   function exportPanel() {
@@ -83,7 +93,7 @@ export function ExperimentsPage() {
     try {
       const saved = await createScenario.mutateAsync({
         name,
-        description: `${values.action} · ${values.period || "período atual"}`,
+        description: `${actionTypeLabel(values.actionType)} · ${values.period || "período atual"}`,
         action_type: values.actionType,
         channel: values.channel,
         intensity_pct: values.intensity,
@@ -195,6 +205,7 @@ export function ExperimentsPage() {
             <ScenarioBuilderForm
               builder={data.scenarioBuilder}
               onApply={applyScenario}
+              channelOptions={channelOptionsQuery.data}
               loading={createScenario.isPending || analyzeScenario.isPending}
             />
             <div
@@ -238,7 +249,12 @@ function buildScenarioComparisonTable(
   base: ScenarioComparisonTableData,
   scenarios: Scenario[],
   run: ModelRun,
+  compare?: ScenarioCompareResponse,
 ): ScenarioComparisonTableData {
+  if (compare?.items?.length) {
+    return buildComparedScenarioTable(base, scenarios, run, compare);
+  }
+
   const baselineConv = run.model_conversion_rate ?? run.observed_conversion_rate ?? null;
   const baselineRevenue = run.total_revenue ?? 0;
   const baselineSpend = run.total_spend ?? 0;
@@ -261,6 +277,81 @@ function buildScenarioComparisonTable(
       },
       ...scenarios.map((scenario) => scenarioToTableRow(scenario, run)),
     ],
+  };
+}
+
+function buildComparedScenarioTable(
+  base: ScenarioComparisonTableData,
+  scenarios: Scenario[],
+  run: ModelRun,
+  compare: ScenarioCompareResponse,
+): ScenarioComparisonTableData {
+  const scenarioById = new Map(scenarios.map((scenario) => [scenario.id, scenario]));
+  const baseline = compare.items.find((item) => item.source === "baseline");
+  const rows = compare.items.map((item, index) => {
+    const scenario = item.scenario_id ? scenarioById.get(item.scenario_id) : undefined;
+    const isBaseline = item.source === "baseline";
+    const delta =
+      compare.items.length === 2 && index === 1 ? compare.delta : undefined;
+    const revenueDelta =
+      delta?.expected_revenue_delta != null
+        ? formatSignedCurrency(delta.expected_revenue_delta)
+        : item.expected_revenue != null && baseline?.expected_revenue != null && !isBaseline
+          ? formatSignedCurrency(item.expected_revenue - baseline.expected_revenue)
+          : undefined;
+    const conversionDelta =
+      delta?.composite_conversion_delta != null
+        ? formatSignedPercentPoints(delta.composite_conversion_delta)
+        : item.composite_conversion_probability != null &&
+            baseline?.composite_conversion_probability != null &&
+            !isBaseline
+          ? formatSignedPercentPoints(
+              item.composite_conversion_probability -
+                baseline.composite_conversion_probability,
+            )
+          : undefined;
+
+    return {
+      scenario: item.name,
+      description:
+        scenario?.description ??
+        (isBaseline ? `Execução #${run.id}` : item.warnings[0] ?? "Cenário salvo"),
+      conversionProbability:
+        item.composite_conversion_probability != null
+          ? formatPercent(item.composite_conversion_probability, 2)
+          : "Pendente",
+      conversionDelta,
+      revenue:
+        item.expected_revenue != null ? formatCompactBRL(item.expected_revenue) : "-",
+      revenueDelta,
+      investment:
+        scenario?.intensity_pct != null && run.total_spend
+          ? formatCompactBRL(run.total_spend * (scenario.intensity_pct / 100))
+          : isBaseline && run.total_spend
+            ? formatCompactBRL(run.total_spend)
+            : "-",
+      roas:
+        item.expected_revenue != null && run.total_spend
+          ? `${(item.expected_revenue / run.total_spend).toFixed(2).replace(".", ",")}x`
+          : "-",
+      impact:
+        item.confidence_score != null
+          ? `Confiança ${formatPercent(item.confidence_score, 0)}`
+          : isBaseline
+            ? "Referência"
+            : item.warnings[0] ?? "Aguardando análise",
+      impactDelta:
+        delta?.confidence_delta != null
+          ? formatSignedPercentPoints(delta.confidence_delta)
+          : undefined,
+      tone: isBaseline ? "neutral" : item.confidence_score != null ? "green" : "orange",
+    } as const;
+  });
+
+  return {
+    ...base,
+    title: "Comparativo de cenários persistidos",
+    rows,
   };
 }
 
