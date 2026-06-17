@@ -68,6 +68,44 @@ export type DataQualityRow = {
   status: string;
   severity: string;
   detail?: string | null;
+  score?: number | null;
+  affected_rows?: number | null;
+  recommendation?: string | null;
+};
+
+export type ModelRunSummaryRow = {
+  observed_conversion_rate?: number | null;
+  model_conversion_rate: number;
+  total_revenue: number;
+  total_spend: number;
+  total_conversions: number;
+  total_nonconversions_sampled: number;
+  non_conv_scale?: number | null;
+  state_count: number;
+  channel_count: number;
+  path_count: number;
+  transition_count: number;
+  confidence_score: number;
+  confidence_label: string;
+};
+
+export type ModelRunInputRow = {
+  source: string;
+  database_id?: number | null;
+  query_name: string;
+  row_count: number;
+  date_min?: string | null;
+  date_max?: string | null;
+  data_hash: string;
+  extracted_at?: string | null;
+};
+
+export type ModelRunLogRow = {
+  step: string;
+  status: string;
+  message?: string | null;
+  duration_seconds?: number | null;
+  created_at?: string | null;
 };
 
 export type InsightRow = {
@@ -276,15 +314,24 @@ export type Scenario = {
   model_run_id: number;
   name: string;
   description: string | null;
+  action_type: ScenarioActionType;
+  channel: string | null;
+  intensity_pct: number | null;
+  period_start: string | null;
+  period_end: string | null;
   nodes: Record<string, unknown>[];
   edges: Record<string, unknown>[];
   path_channels: string[];
   created_at: string | null;
   updated_at: string | null;
+  analysis: ScenarioAnalysis | null;
 };
 
 export type ScenarioAnalysis = {
   scenario_id: number;
+  model_run_id: number | null;
+  code_version: string | null;
+  analyzed_at: string | null;
   path_channels: string[];
   path_probability: number | null;
   conversion_probability_given_last_node: number | null;
@@ -304,10 +351,22 @@ export type ScenarioAnalysis = {
   confidence_score: number | null;
 };
 
+export type ScenarioActionType =
+  | "removeChannel"
+  | "reducePresence"
+  | "redistributeBudget"
+  | "compareModels"
+  | "path";
+
 export type ScenarioCreatePayload = {
   model_run_id: number;
   name: string;
   description?: string | null;
+  action_type: ScenarioActionType;
+  channel?: string | null;
+  intensity_pct?: number | null;
+  period_start?: string | null;
+  period_end?: string | null;
   nodes: Record<string, unknown>[];
   edges: Record<string, unknown>[];
   path_channels: string[];
@@ -316,6 +375,11 @@ export type ScenarioCreatePayload = {
 export type ScenarioUpdatePayload = {
   name?: string;
   description?: string | null;
+  action_type?: ScenarioActionType;
+  channel?: string | null;
+  intensity_pct?: number | null;
+  period_start?: string | null;
+  period_end?: string | null;
   nodes?: Record<string, unknown>[];
   edges?: Record<string, unknown>[];
   path_channels?: string[];
@@ -361,6 +425,124 @@ export type ScenarioComparePayload = {
   include_top_path: boolean;
 };
 
+export type DashboardMetric = {
+  id: string;
+  label: string;
+  value: number | null;
+  delta?: { value: number | null; pct: number | null } | null;
+  tone: string;
+};
+
+export type DashboardRecommendation = {
+  channel: string;
+  recommendation: string;
+  recommendation_tone: string;
+  priority_rank: number;
+  rationale: string[];
+  risks: string[];
+  best_practices: string[];
+  suggested_budget_delta_pct?: number | null;
+  suggested_budget_delta_value?: number | null;
+  estimated_revenue_delta?: number | null;
+  estimated_roas_min?: number | null;
+  estimated_roas_max?: number | null;
+  saturation_score?: number | null;
+  confidence_score: number;
+};
+
+export type DashboardSummary = {
+  observed_conversion_rate?: number | null;
+  model_conversion_rate: number;
+  total_revenue: number;
+  total_spend: number;
+  total_conversions: number;
+  total_nonconversions_sampled: number;
+  confidence_score: number;
+  confidence_label: string;
+};
+
+export type OverviewDashboardResponse = {
+  meta: { run_id: number; compare_run_id?: number | null; generated_at: string };
+  summary: DashboardSummary;
+  metric_strip: DashboardMetric[];
+  priority_decisions: DashboardRecommendation[];
+  model_consensus: {
+    axes: { x: string; y: string };
+    points: Array<{
+      channel: string;
+      markov_weight_pct: number;
+      shapley_weight_pct: number;
+      spend: number;
+      revenue: number;
+      recommendation_tone?: string | null;
+    }>;
+  };
+  journey_summary: {
+    top_entries: Array<{ name: string; value: number }>;
+    top_assistants: Array<{ name: string; value: number }>;
+    top_closers: Array<{ name: string; value: number }>;
+    flow_stages: Array<{ name: string; value: number }>;
+  };
+  analysis_confidence: {
+    score: number;
+    label: string;
+    calibration_gap_pp?: number | null;
+    data_quality_score?: number | null;
+  };
+  footer_note: string;
+};
+
+export type BudgetDashboardResponse = {
+  meta: { run_id: number; compare_run_id?: number | null; generated_at: string };
+  summary_cards: Array<{
+    id: string;
+    label: string;
+    count: number;
+    estimated_revenue_delta: number;
+    tone: string;
+  }>;
+  allocation_matrix: Array<{
+    channel: string;
+    spend_share_pct: number;
+    revenue_share_pct: number;
+    revenue: number;
+    recommendation: string;
+    tone: string;
+  }>;
+  opportunities_and_risks: {
+    opportunities: DashboardRecommendation[];
+    risks: DashboardRecommendation[];
+  };
+  channels_table: Array<{
+    channel: string;
+    recommendation: string;
+    tone: string;
+    spend: number;
+    revenue: number;
+    roas_markov?: number | null;
+    roas_shapley?: number | null;
+    consensus_score: number;
+    role?: string | null;
+    presence_score: number;
+    suggested_budget_delta_pct?: number | null;
+    suggested_budget_delta_value?: number | null;
+    estimated_revenue_delta?: number | null;
+  }>;
+  selected_channel_drawer: {
+    channel: string;
+    recommendation: string;
+    tone: string;
+    rationale: string[];
+    risks: string[];
+    best_practices: string[];
+    suggested_budget_delta_pct?: number | null;
+    suggested_budget_delta_value?: number | null;
+    estimated_revenue_delta?: number | null;
+    estimated_roas_min?: number | null;
+    estimated_roas_max?: number | null;
+  } | null;
+};
+
 export type ModelRunCreatePayload = {
   start_date: string;
   end_date: string;
@@ -393,6 +575,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   listRuns: () => request<ModelRun[]>("/model-runs"),
   getOverview: (id: number) => request<ModelRun>(`/model-runs/${id}/overview`),
+  getOverviewDashboard: (id: number, compareId?: number) =>
+    request<OverviewDashboardResponse>(
+      `/model-runs/${id}/dashboard/overview${compareId ? `?compare_run_id=${compareId}` : ""}`,
+    ),
+  getBudgetDashboard: (id: number, compareId?: number, channel?: string) => {
+    const params = new URLSearchParams();
+    if (compareId) params.set("compare_run_id", String(compareId));
+    if (channel) params.set("channel", channel);
+    const qs = params.toString();
+    return request<BudgetDashboardResponse>(
+      `/model-runs/${id}/dashboard/budget${qs ? `?${qs}` : ""}`,
+    );
+  },
   getChannels: (id: number) =>
     request<TableResponse<ChannelRow>>(`/model-runs/${id}/channels`),
   getDiagnostics: (id: number) =>
@@ -404,6 +599,12 @@ export const api = {
   getGraph: (id: number) => request<GraphResponse>(`/model-runs/${id}/graph`),
   getDataQuality: (id: number) =>
     request<TableResponse<DataQualityRow>>(`/model-runs/${id}/data-quality`),
+  getSummary: (id: number) =>
+    request<ModelRunSummaryRow>(`/model-runs/${id}/summary`),
+  getInputs: (id: number) =>
+    request<ModelRunInputRow[]>(`/model-runs/${id}/inputs`),
+  getLogs: (id: number) =>
+    request<ModelRunLogRow[]>(`/model-runs/${id}/logs`),
   getPaths: (id: number) =>
     request<TableResponse<PathRow>>(`/model-runs/${id}/paths`),
   getLoops: (id: number) =>
@@ -432,31 +633,35 @@ export const api = {
 
   // Sandbox
   listScenarios: (modelRunId: number) =>
-    request<Scenario[]>(`/sandbox/scenarios?model_run_id=${modelRunId}`),
-  getScenario: (id: number) => request<Scenario>(`/sandbox/scenarios/${id}`),
+    request<Scenario[]>(`/model-runs/${modelRunId}/scenarios`),
+  getScenario: (id: number) => request<Scenario>(`/scenarios/${id}`),
   createScenario: (payload: ScenarioCreatePayload) =>
-    request<Scenario>("/sandbox/scenarios", {
+    request<Scenario>(`/model-runs/${payload.model_run_id}/scenarios`, {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, model_run_id: undefined }),
     }),
   updateScenario: (id: number, payload: ScenarioUpdatePayload) =>
-    request<Scenario>(`/sandbox/scenarios/${id}`, {
+    request<Scenario>(`/scenarios/${id}`, {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
   deleteScenario: (id: number) =>
-    fetch(`${API_BASE}/sandbox/scenarios/${id}`, { method: "DELETE" }).then(
-      () => undefined,
-    ),
+    fetch(`${API_BASE}/scenarios/${id}`, { method: "DELETE" }).then((response) => {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return undefined;
+    }),
   analyzeScenario: (id: number) =>
-    request<ScenarioAnalysis>(`/sandbox/scenarios/${id}/analyze`, {
+    request<ScenarioAnalysis>(`/scenarios/${id}/analyze`, {
       method: "POST",
     }),
   compareScenarios: (payload: ScenarioComparePayload) =>
-    request<ScenarioCompareResponse>("/sandbox/compare", {
+    request<ScenarioCompareResponse>(
+      `/model-runs/${payload.model_run_id}/scenarios/compare`,
+      {
       method: "POST",
-      body: JSON.stringify(payload),
-    }),
+      body: JSON.stringify({ ...payload, model_run_id: undefined }),
+      },
+    ),
 };
 
 // ---------------------------------------------------------------------------

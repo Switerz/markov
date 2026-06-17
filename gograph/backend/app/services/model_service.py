@@ -14,6 +14,7 @@ from gograph.backend.app.schemas import ModelRunParams, ModelRunResult
 from gograph.backend.app.services import (
     attribution_service, extraction_service, path_service
 )
+from gograph.backend.app.db.session import get_session_factory
 from gograph.backend.app.services.insight_service import compute_data_quality
 from gograph.backend.app.services.loop_service import (
     compute_loop_diagnostics,
@@ -28,6 +29,7 @@ from gograph.backend.app.services.roas_service import (
     compute_roas
 )
 from gograph.backend.app.services.pfc_service import compute_pfc_attribution
+from gograph.backend.app.services.log_service import run_logged_step
 
 
 def params_from_config() -> ModelRunParams:
@@ -58,6 +60,8 @@ def run_model(
     observed_conversion_rate: Optional[float] = None,
     raw_paths: Optional[pd.DataFrame] = None,
     paid_channels: Optional[Set[str]] = None,
+    model_run_id: Optional[int] = None,
+    database_url: Optional[str] = None,
 ) -> ModelRunResult:
     """
     Run the full attribution engine through a reusable service contract.
@@ -77,8 +81,21 @@ def run_model(
         )
 
     if converting_transitions is None or nonconverting_transitions is None:
-        converting_transitions, nonconverting_transitions = (
-            extraction_service.extract_transition_counts(params)
+        def extract_transitions() -> tuple[pd.DataFrame, pd.DataFrame]:
+            return _with_lineage_session(
+                database_url,
+                lambda session: extraction_service.extract_transition_counts(
+                    params,
+                    model_run_id=model_run_id,
+                    session=session,
+                ),
+            )
+
+        converting_transitions, nonconverting_transitions = run_logged_step(
+            database_url=database_url,
+            model_run_id=model_run_id,
+            step="extraction",
+            fn=extract_transitions,
         )
 
     if converting_transitions.empty:
@@ -89,7 +106,14 @@ def run_model(
         )
 
     if observed_conversion_rate is None and params.non_conv_scale is None:
-        observed_conversion_rate = extraction_service.extract_observed_conversion_rate(params)
+        observed_conversion_rate = _with_lineage_session(
+            database_url,
+            lambda session: extraction_service.extract_observed_conversion_rate(
+                params,
+                model_run_id=model_run_id,
+                session=session,
+            ),
+        )
 
     scale = attribution_service.calibrate_nonconv_scale(
         converting_transitions,
@@ -108,33 +132,62 @@ def run_model(
     )
 
     if total_revenue is None:
-        total_revenue = extraction_service.extract_total_revenue(params)
+        total_revenue = _with_lineage_session(
+            database_url,
+            lambda session: extraction_service.extract_total_revenue(
+                params,
+                model_run_id=model_run_id,
+                session=session,
+            ),
+        )
     if spend is None:
-        spend = extraction_service.extract_spend(params)
+        spend = _with_lineage_session(
+            database_url,
+            lambda session: extraction_service.extract_spend(
+                params,
+                model_run_id=model_run_id,
+                session=session,
+            ),
+        )
 
-    markov_results = attribution_service.compute_markov_attribution(
-        T,
-        states,
-        converting_transitions,
-        total_revenue=total_revenue,
+    markov_results = run_logged_step(
+        database_url=database_url,
+        model_run_id=model_run_id,
+        step="markov",
+        fn=lambda: attribution_service.compute_markov_attribution(
+            T,
+            states,
+            converting_transitions,
+            total_revenue=total_revenue,
+        ),
     )
-    shapley_results = attribution_service.compute_shapley_attribution(
-        T,
-        states,
-        total_revenue=total_revenue,
-        n_samples=params.shapley_samples,
-        seed=params.shapley_seed,
+    shapley_results = run_logged_step(
+        database_url=database_url,
+        model_run_id=model_run_id,
+        step="shapley",
+        fn=lambda: attribution_service.compute_shapley_attribution(
+            T,
+            states,
+            total_revenue=total_revenue,
+            n_samples=params.shapley_samples,
+            seed=params.shapley_seed,
+        ),
     )
     diagnostics = compute_channel_diagnostics(
         converting_transitions,
         nonconverting_transitions,
     )
-    roas_results = compute_roas(
-        markov_results,
-        shapley_results,
-        spend,
-        diagnostics,
-        paid_channels=paid_channels or config.PAID_CHANNELS,
+    roas_results = run_logged_step(
+        database_url=database_url,
+        model_run_id=model_run_id,
+        step="roas",
+        fn=lambda: compute_roas(
+            markov_results,
+            shapley_results,
+            spend,
+            diagnostics,
+            paid_channels=paid_channels or config.PAID_CHANNELS,
+        ),
     )
     data_quality = compute_data_quality(
         converting_transitions,
@@ -148,7 +201,14 @@ def run_model(
     # Sprint 7: Path Intelligence — extract only if not injected, fail gracefully
     if raw_paths is None:
         try:
-            raw_paths = extraction_service.extract_raw_paths(params)
+            raw_paths = _with_lineage_session(
+                database_url,
+                lambda session: extraction_service.extract_raw_paths(
+                    params,
+                    model_run_id=model_run_id,
+                    session=session,
+                ),
+            )
         except Exception as exc:
             logger.warning(
                 "extract_raw_paths falhou (lookback=%s, %s–%s): %s — paths ficarão vazios.",
@@ -292,3 +352,19 @@ def run_model(
         funnel_model_active=funnel_model_active,
         session_quality=session_quality_df if not session_quality_df.empty else None,
     )
+
+
+def _with_lineage_session(database_url: str | None, fn):
+    if database_url is None:
+        return fn(None)
+    factory = get_session_factory(database_url)
+    session = factory()
+    try:
+        result = fn(session)
+        session.commit()
+        return result
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()

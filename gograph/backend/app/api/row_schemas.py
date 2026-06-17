@@ -11,9 +11,10 @@ to `None` before validation.
 
 from __future__ import annotations
 
+import json
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 _ROW_CONFIG = ConfigDict(from_attributes=True, populate_by_name=True)
@@ -43,6 +44,76 @@ class ChannelMetricRow(BaseModel):
     pfc_delta_pp: Optional[float] = None
     recommendation: Optional[str] = None
     confidence_score: Optional[float] = None
+
+
+class ModelRunSummaryRow(BaseModel):
+    """Row for `/summary` (model_run_summary)."""
+
+    model_config = _ROW_CONFIG
+
+    observed_conversion_rate: Optional[float] = None
+    model_conversion_rate: float
+    total_revenue: float
+    total_spend: float
+    total_conversions: int
+    total_nonconversions_sampled: int
+    non_conv_scale: Optional[float] = None
+    state_count: int
+    channel_count: int
+    path_count: int
+    transition_count: int
+    confidence_score: float
+    confidence_label: str
+
+
+class ChannelRecommendationRow(BaseModel):
+    """Row for `/recommendations` (channel_recommendations)."""
+
+    model_config = _ROW_CONFIG
+
+    channel: str
+    recommendation: str
+    recommendation_tone: str
+    priority_rank: int
+    rationale: list[str]
+    risks: list[str]
+    best_practices: list[str]
+    suggested_budget_delta_pct: Optional[float] = None
+    suggested_budget_delta_value: Optional[float] = None
+    estimated_revenue_delta: Optional[float] = None
+    estimated_roas_min: Optional[float] = None
+    estimated_roas_max: Optional[float] = None
+    saturation_score: Optional[float] = None
+    confidence_score: float
+
+
+def recommendation_row_from_orm(row: object) -> ChannelRecommendationRow:
+    """Parse JSON text columns from ChannelRecommendation into the public row."""
+
+    def load_list(name: str) -> list[str]:
+        raw = getattr(row, name, "[]")
+        try:
+            value = json.loads(raw or "[]")
+        except json.JSONDecodeError:
+            value = []
+        return [str(item) for item in value] if isinstance(value, list) else []
+
+    return ChannelRecommendationRow(
+        channel=getattr(row, "channel"),
+        recommendation=getattr(row, "recommendation"),
+        recommendation_tone=getattr(row, "recommendation_tone"),
+        priority_rank=getattr(row, "priority_rank"),
+        rationale=load_list("rationale_json"),
+        risks=load_list("risks_json"),
+        best_practices=load_list("best_practices_json"),
+        suggested_budget_delta_pct=getattr(row, "suggested_budget_delta_pct"),
+        suggested_budget_delta_value=getattr(row, "suggested_budget_delta_value"),
+        estimated_revenue_delta=getattr(row, "estimated_revenue_delta"),
+        estimated_roas_min=getattr(row, "estimated_roas_min"),
+        estimated_roas_max=getattr(row, "estimated_roas_max"),
+        saturation_score=getattr(row, "saturation_score"),
+        confidence_score=getattr(row, "confidence_score"),
+    )
 
 
 class DiagnosticRow(BaseModel):
@@ -141,6 +212,36 @@ class DataQualityRow(BaseModel):
     status: Optional[str] = None
     severity: Optional[str] = None
     detail: Optional[str] = None
+    score: Optional[float] = None
+    affected_rows: Optional[int] = None
+    recommendation: Optional[str] = None
+
+
+class ModelRunInputRow(BaseModel):
+    """Row for `/inputs` (model_run_inputs)."""
+
+    model_config = _ROW_CONFIG
+
+    source: str
+    database_id: Optional[int] = None
+    query_name: str
+    row_count: int
+    date_min: Optional[str] = None
+    date_max: Optional[str] = None
+    data_hash: str
+    extracted_at: Optional[str] = None
+
+
+class ModelRunLogRow(BaseModel):
+    """Row for `/logs` (model_run_logs)."""
+
+    model_config = _ROW_CONFIG
+
+    step: str
+    status: str
+    message: Optional[str] = None
+    duration_seconds: Optional[float] = None
+    created_at: Optional[str] = None
 
 
 class LoopDiagnosticRow(BaseModel):
@@ -198,6 +299,72 @@ class FunnelValidationRow(BaseModel):
     low_intent_drag_score: Optional[float] = None
     qualified_intent_share: Optional[float] = None
     markov_excl_low_intent: Optional[float] = None
+
+
+class ScenarioGraphData(BaseModel):
+    """Graph payload persisted separately from a scenario row."""
+
+    nodes: list[dict] = []
+    edges: list[dict] = []
+    path_channels: list[str] = []
+
+
+class ScenarioAnalysisRow(BaseModel):
+    """Last persisted analysis for a scenario."""
+
+    model_config = _ROW_CONFIG
+
+    scenario_id: int
+    model_run_id: int
+    code_version: str
+    analyzed_at: Optional[str] = None
+    path_channels: list[str] = []
+    path_probability: Optional[float] = None
+    conversion_probability_given_last_node: Optional[float] = None
+    composite_conversion_probability: Optional[float] = None
+    historical_conversion_rate: Optional[float] = None
+    lift: Optional[float] = None
+    expected_revenue: Optional[float] = None
+    expected_ticket: Optional[float] = None
+    historical_support: int = 0
+    confidence_score: Optional[float] = None
+    warnings: list[str] = []
+    similar_paths: list[dict] = []
+
+    @field_validator("warnings", "similar_paths", mode="before")
+    @classmethod
+    def _load_json_list(cls, value: object) -> list:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            try:
+                loaded = json.loads(value or "[]")
+            except json.JSONDecodeError:
+                return []
+            return loaded if isinstance(loaded, list) else []
+        return value if isinstance(value, list) else []
+
+
+class ScenarioRow(BaseModel):
+    """Typed scenario row including graph data and optional latest analysis."""
+
+    model_config = _ROW_CONFIG
+
+    id: int
+    model_run_id: int
+    name: str
+    description: Optional[str] = None
+    action_type: str
+    channel: Optional[str] = None
+    intensity_pct: Optional[float] = None
+    period_start: Optional[str] = None
+    period_end: Optional[str] = None
+    nodes: list[dict] = []
+    edges: list[dict] = []
+    path_channels: list[str] = []
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    analysis: Optional[ScenarioAnalysisRow] = None
 
 
 class SequentialEffectRow(BaseModel):

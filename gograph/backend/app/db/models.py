@@ -1,8 +1,8 @@
 """SQLAlchemy models for persisted GoGraph model runs."""
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from gograph.backend.app.db.base import Base
@@ -69,6 +69,112 @@ class ModelRun(Base):
         back_populates="model_run",
         cascade="all, delete-orphan",
     )
+    summary: Mapped["ModelRunSummary | None"] = relationship(
+        back_populates="model_run",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    channel_recommendations: Mapped[list["ChannelRecommendation"]] = relationship(
+        back_populates="model_run",
+        cascade="all, delete-orphan",
+    )
+    inputs: Mapped[list["ModelRunInput"]] = relationship(
+        back_populates="model_run",
+        cascade="all, delete-orphan",
+    )
+    logs: Mapped[list["ModelRunLog"]] = relationship(
+        back_populates="model_run",
+        cascade="all, delete-orphan",
+    )
+
+
+class ModelRunSummary(Base):
+    __tablename__ = "model_run_summary"
+
+    model_run_id: Mapped[int] = mapped_column(
+        ForeignKey("model_runs.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    observed_conversion_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    model_conversion_rate: Mapped[float] = mapped_column(Float)
+    total_revenue: Mapped[float] = mapped_column(Float)
+    total_spend: Mapped[float] = mapped_column(Float)
+    total_conversions: Mapped[int] = mapped_column(Integer)
+    total_nonconversions_sampled: Mapped[int] = mapped_column(Integer)
+    non_conv_scale: Mapped[float | None] = mapped_column(Float, nullable=True)
+    state_count: Mapped[int] = mapped_column(Integer)
+    channel_count: Mapped[int] = mapped_column(Integer)
+    path_count: Mapped[int] = mapped_column(Integer)
+    transition_count: Mapped[int] = mapped_column(Integer)
+    confidence_score: Mapped[float] = mapped_column(Float)
+    confidence_label: Mapped[str] = mapped_column(String(32))
+
+    model_run: Mapped["ModelRun"] = relationship(back_populates="summary")
+
+
+class ChannelRecommendation(Base):
+    __tablename__ = "channel_recommendations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    model_run_id: Mapped[int] = mapped_column(
+        ForeignKey("model_runs.id", ondelete="CASCADE"),
+        index=True,
+    )
+    channel: Mapped[str] = mapped_column(String(255), index=True)
+    recommendation: Mapped[str] = mapped_column(String(32))
+    recommendation_tone: Mapped[str] = mapped_column(String(32))
+    priority_rank: Mapped[int] = mapped_column(Integer)
+    rationale_json: Mapped[str] = mapped_column(Text)
+    risks_json: Mapped[str] = mapped_column(Text)
+    best_practices_json: Mapped[str] = mapped_column(Text)
+    suggested_budget_delta_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    suggested_budget_delta_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    estimated_revenue_delta: Mapped[float | None] = mapped_column(Float, nullable=True)
+    estimated_roas_min: Mapped[float | None] = mapped_column(Float, nullable=True)
+    estimated_roas_max: Mapped[float | None] = mapped_column(Float, nullable=True)
+    saturation_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    confidence_score: Mapped[float] = mapped_column(Float)
+
+    model_run: Mapped["ModelRun"] = relationship(back_populates="channel_recommendations")
+
+    __table_args__ = (UniqueConstraint("model_run_id", "channel"),)
+
+
+class ModelRunInput(Base):
+    __tablename__ = "model_run_inputs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    model_run_id: Mapped[int] = mapped_column(
+        ForeignKey("model_runs.id", ondelete="CASCADE"),
+        index=True,
+    )
+    source: Mapped[str] = mapped_column(String(64), index=True)
+    database_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    query_name: Mapped[str] = mapped_column(String(255), index=True)
+    row_count: Mapped[int] = mapped_column(Integer)
+    date_min: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    date_max: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    data_hash: Mapped[str] = mapped_column(String(64))
+    extracted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    model_run: Mapped["ModelRun"] = relationship(back_populates="inputs")
+
+
+class ModelRunLog(Base):
+    __tablename__ = "model_run_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    model_run_id: Mapped[int] = mapped_column(
+        ForeignKey("model_runs.id", ondelete="CASCADE"),
+        index=True,
+    )
+    step: Mapped[str] = mapped_column(String(64), index=True)
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    model_run: Mapped["ModelRun"] = relationship(back_populates="logs")
 
 
 class TransitionCount(Base):
@@ -175,6 +281,9 @@ class DataQualityCheck(Base):
     status: Mapped[str] = mapped_column(String(32), index=True)
     severity: Mapped[str] = mapped_column(String(32), index=True)
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    affected_rows: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    recommendation: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     model_run: Mapped[ModelRun] = relationship(back_populates="data_quality_checks")
 
@@ -195,16 +304,70 @@ class Scenario(Base):
     __tablename__ = "scenarios"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    model_run_id: Mapped[int] = mapped_column(ForeignKey("model_runs.id"), index=True)
+    model_run_id: Mapped[int] = mapped_column(
+        ForeignKey("model_runs.id", ondelete="CASCADE"),
+        index=True,
+    )
     name: Mapped[str] = mapped_column(String(255))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    nodes_json: Mapped[str] = mapped_column(Text, default="[]")
-    edges_json: Mapped[str] = mapped_column(Text, default="[]")
-    path_channels_json: Mapped[str] = mapped_column(Text, default="[]")
+    action_type: Mapped[str] = mapped_column(String(32), default="path", index=True)
+    channel: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    intensity_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    period_end: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     model_run: Mapped[ModelRun] = relationship(back_populates="scenarios")
+    graph: Mapped["ScenarioGraph | None"] = relationship(
+        back_populates="scenario",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    analysis: Mapped["ScenarioAnalysis | None"] = relationship(
+        back_populates="scenario",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+
+
+class ScenarioGraph(Base):
+    __tablename__ = "scenario_graph"
+
+    scenario_id: Mapped[int] = mapped_column(
+        ForeignKey("scenarios.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    nodes_json: Mapped[str] = mapped_column(Text, default="[]")
+    edges_json: Mapped[str] = mapped_column(Text, default="[]")
+    path_channels_json: Mapped[str] = mapped_column(Text, default="[]")
+
+    scenario: Mapped["Scenario"] = relationship(back_populates="graph")
+
+
+class ScenarioAnalysis(Base):
+    __tablename__ = "scenario_analysis"
+
+    scenario_id: Mapped[int] = mapped_column(
+        ForeignKey("scenarios.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    model_run_id: Mapped[int] = mapped_column(Integer, index=True)
+    code_version: Mapped[str] = mapped_column(String(64))
+    analyzed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    path_probability: Mapped[float | None] = mapped_column(Float, nullable=True)
+    conversion_probability_given_last_node: Mapped[float | None] = mapped_column(Float, nullable=True)
+    composite_conversion_probability: Mapped[float | None] = mapped_column(Float, nullable=True)
+    historical_conversion_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lift: Mapped[float | None] = mapped_column(Float, nullable=True)
+    expected_revenue: Mapped[float | None] = mapped_column(Float, nullable=True)
+    expected_ticket: Mapped[float | None] = mapped_column(Float, nullable=True)
+    historical_support: Mapped[int] = mapped_column(Integer, default=0)
+    confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    warnings_json: Mapped[str] = mapped_column(Text, default="[]")
+    similar_paths_json: Mapped[str] = mapped_column(Text, default="[]")
+
+    scenario: Mapped["Scenario"] = relationship(back_populates="analysis")
 
 
 ModelRun.scenarios = relationship(
@@ -216,6 +379,8 @@ ModelRun.scenarios = relationship(
 Index("ix_transition_counts_run_type", TransitionCount.model_run_id, TransitionCount.transition_type)
 Index("ix_attribution_results_run_channel", AttributionResult.model_run_id, AttributionResult.channel)
 Index("ix_channel_diagnostics_run_channel", ChannelDiagnostic.model_run_id, ChannelDiagnostic.channel)
+Index("ix_model_run_inputs_run_query", ModelRunInput.model_run_id, ModelRunInput.query_name)
+Index("ix_model_run_logs_run_created", ModelRunLog.model_run_id, ModelRunLog.created_at)
 
 
 # ---------------------------------------------------------------------------

@@ -15,11 +15,15 @@ from sqlalchemy.orm import Session, sessionmaker
 from gograph.backend.app.db.models import (
     AttributionResult,
     ChannelDiagnostic,
+    ChannelRecommendation,
     DataQualityCheck,
     ExportRecord,
     FunnelStateAttribution,
     LoopDiagnostic,
+    ModelRunInput,
+    ModelRunLog,
     ModelRun,
+    ModelRunSummary,
     PathSummary,
     SequentialEffect,
     SessionQuality,
@@ -31,6 +35,9 @@ from gograph.backend.app.db.session import (
     get_session_factory,
 )
 from gograph.backend.app.schemas import ModelRunResult
+from gograph.backend.app.services.recommendation_service import derive_recommendations
+from gograph.backend.app.services.summary_service import compute_summary
+from gograph.backend.app.services.log_service import insert_log
 
 
 def _clean_value(value: Any) -> Any:
@@ -87,7 +94,12 @@ def save_model_run(
     if session is None:
         init_database(database_url)
         with session_scope(database_url=database_url) as scoped_session:
-            return save_model_run(result, model_run_id=model_run_id, session=scoped_session)
+            return save_model_run(
+                result,
+                model_run_id=model_run_id,
+                session=scoped_session,
+                database_url=database_url,
+            )
 
     if model_run_id is None:
         model_run = ModelRun(
@@ -141,6 +153,33 @@ def save_model_run(
         _save_sequential_effects(session, model_run.id, result.sequential_effects)
     if result.session_quality is not None and not result.session_quality.empty:
         _save_session_quality(session, model_run.id, result.session_quality)
+    summary = compute_summary(
+        channel_rows=result.roas_results,
+        path_rows=result.top_paths,
+        transition_rows=result.transition_counts,
+        states=result.states,
+        observed_rate=result.observed_conversion_rate,
+        model_rate=result.model_conversion_rate,
+        total_revenue=result.total_revenue,
+        total_spend=result.total_spend,
+        non_conv_scale=result.non_conv_scale,
+        data_quality_rows=result.data_quality,
+    )
+    save_model_run_summary(session, model_run.id, summary)
+    if model_run_id is not None:
+        insert_log(session, model_run.id, "recommendation", "started")
+    try:
+        recs = derive_recommendations(
+            result.roas_results,
+            result.session_quality if result.session_quality is not None else None,
+        )
+        save_channel_recommendations(session, model_run.id, recs)
+        if model_run_id is not None:
+            insert_log(session, model_run.id, "recommendation", "success")
+    except Exception as exc:
+        if model_run_id is not None:
+            insert_log(session, model_run.id, "recommendation", "failed", message=str(exc))
+        raise
 
     return model_run.id
 
@@ -239,6 +278,10 @@ def get_model_run_table(
         "channel_diagnostics": ChannelDiagnostic,
         "path_summary": PathSummary,
         "data_quality_checks": DataQualityCheck,
+        "model_run_inputs": ModelRunInput,
+        "model_run_logs": ModelRunLog,
+        "model_run_summary": ModelRunSummary,
+        "channel_recommendations": ChannelRecommendation,
         "exports": ExportRecord,
         "loop_diagnostics": LoopDiagnostic,
         "funnel_state_attribution": FunnelStateAttribution,
@@ -268,6 +311,10 @@ def clear_database(database_url: str | None = None) -> None:
             ChannelDiagnostic,
             PathSummary,
             DataQualityCheck,
+            ModelRunSummary,
+            ChannelRecommendation,
+            ModelRunInput,
+            ModelRunLog,
             ExportRecord,
             LoopDiagnostic,
             FunnelStateAttribution,
@@ -447,6 +494,9 @@ def _save_data_quality(
                 status=str(_row_value(row, "status")),
                 severity=str(_row_value(row, "severity")),
                 detail=_row_value(row, "detail"),
+                score=_row_value(row, "score"),
+                affected_rows=_row_value(row, "affected_rows"),
+                recommendation=_row_value(row, "recommendation"),
             )
         )
 
@@ -551,6 +601,65 @@ def _save_session_quality(
         )
 
 
+def save_model_run_summary(session: Session, model_run_id: int, summary: dict[str, Any]) -> None:
+    existing = session.get(ModelRunSummary, model_run_id)
+    if existing is not None:
+        session.delete(existing)
+        session.flush()
+    session.add(
+        ModelRunSummary(
+            model_run_id=model_run_id,
+            observed_conversion_rate=_clean_value(summary.get("observed_conversion_rate")),
+            model_conversion_rate=float(summary.get("model_conversion_rate", 0.0) or 0.0),
+            total_revenue=float(summary.get("total_revenue", 0.0) or 0.0),
+            total_spend=float(summary.get("total_spend", 0.0) or 0.0),
+            total_conversions=int(summary.get("total_conversions", 0) or 0),
+            total_nonconversions_sampled=int(summary.get("total_nonconversions_sampled", 0) or 0),
+            non_conv_scale=_clean_value(summary.get("non_conv_scale")),
+            state_count=int(summary.get("state_count", 0) or 0),
+            channel_count=int(summary.get("channel_count", 0) or 0),
+            path_count=int(summary.get("path_count", 0) or 0),
+            transition_count=int(summary.get("transition_count", 0) or 0),
+            confidence_score=float(summary.get("confidence_score", 0.0) or 0.0),
+            confidence_label=str(summary.get("confidence_label", "Baixa")),
+        )
+    )
+
+
+def save_channel_recommendations(
+    session: Session,
+    model_run_id: int,
+    recs: list[dict[str, Any]],
+) -> None:
+    rows = session.execute(
+        select(ChannelRecommendation).where(ChannelRecommendation.model_run_id == model_run_id)
+    ).scalars()
+    for row in rows:
+        session.delete(row)
+    session.flush()
+
+    for rec in recs:
+        session.add(
+            ChannelRecommendation(
+                model_run_id=model_run_id,
+                channel=str(rec.get("channel")),
+                recommendation=str(rec.get("recommendation")),
+                recommendation_tone=str(rec.get("recommendation_tone")),
+                priority_rank=int(rec.get("priority_rank", 0) or 0),
+                rationale_json=json.dumps(rec.get("rationale", []), ensure_ascii=False),
+                risks_json=json.dumps(rec.get("risks", []), ensure_ascii=False),
+                best_practices_json=json.dumps(rec.get("best_practices", []), ensure_ascii=False),
+                suggested_budget_delta_pct=_clean_value(rec.get("suggested_budget_delta_pct")),
+                suggested_budget_delta_value=_clean_value(rec.get("suggested_budget_delta_value")),
+                estimated_revenue_delta=_clean_value(rec.get("estimated_revenue_delta")),
+                estimated_roas_min=_clean_value(rec.get("estimated_roas_min")),
+                estimated_roas_max=_clean_value(rec.get("estimated_roas_max")),
+                saturation_score=_clean_value(rec.get("saturation_score")),
+                confidence_score=float(rec.get("confidence_score", 0.0) or 0.0),
+            )
+        )
+
+
 def register_export(
     model_run_id: int,
     export_type: str,
@@ -604,6 +713,10 @@ def _clear_model_run_children(session: Session, model_run_id: int) -> None:
         ChannelDiagnostic,
         PathSummary,
         DataQualityCheck,
+        ModelRunSummary,
+        ChannelRecommendation,
+        ModelRunInput,
+        ModelRunLog,
         ExportRecord,
         LoopDiagnostic,
         FunnelStateAttribution,

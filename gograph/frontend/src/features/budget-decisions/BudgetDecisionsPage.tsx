@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Download, Plus } from "lucide-react";
 import { TopBar } from "../../app/TopBar";
+import { useActiveRun } from "../../app/hooks/useActiveRun";
 import { Button, useToast } from "../../shared/ui";
 import { downloadCsv, todayIso } from "../../shared/format";
 import { NewRunDialog } from "../../app/dialogs/NewRunDialog";
@@ -14,7 +15,8 @@ import { ChannelDetailsDrawer } from "./components/ChannelDetailsDrawer";
 import styles from "./BudgetDecisionsPage.module.css";
 
 export function BudgetDecisionsPage() {
-  const data = useBudgetDecisionsData();
+  const activeRun = useActiveRun();
+  const data = useBudgetDecisionsData(activeRun?.id);
   // Drawer stays closed on initial load — users open it explicitly by
   // clicking a row in the table or a bubble in the matrix. The previous
   // auto-open behavior felt like an uncloseable sidebar.

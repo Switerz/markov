@@ -19,11 +19,12 @@ export type TopBarAction = {
 };
 
 export type ScenarioActionType = {
-  id:
+      id:
     | "removeChannel"
     | "reducePresence"
     | "redistributeBudget"
-    | "compareModels";
+    | "compareModels"
+    | "path";
   label: string;
   icon: string;
   active?: boolean;
