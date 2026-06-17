@@ -5,10 +5,10 @@ import math
 from pathlib import Path
 
 import config
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from gograph.backend.app.api.dashboard_schemas import (
@@ -54,8 +54,7 @@ from gograph.backend.app.api.schemas import (
 )
 from gograph.backend.app.schemas import ModelRunParams
 from gograph.backend.app.db.models import (
-    AttributionResult,
-    ChannelDiagnostic,
+    ChannelMetric,
     ChannelRecommendation,
     DataQualityCheck,
     ModelRun,
@@ -63,7 +62,8 @@ from gograph.backend.app.db.models import (
     ModelRunLog,
     ModelRunSummary,
     PathSummary,
-    TransitionCount,
+    SequentialEffect,
+    TransitionEdge,
 )
 from gograph.backend.app.services.journey_insight_service import (
     compute_touchpoint_metrics,
@@ -85,6 +85,9 @@ from gograph.backend.app.services.persistence_service import (
 )
 
 router = APIRouter(prefix="/model-runs", tags=["model-runs"])
+MAX_PAGE_SIZE = 500
+# Converts absolute Markov/Shapley weight delta into a 0-1 agreement score.
+CONSENSUS_DELTA_MULTIPLIER = 5.0
 
 
 @router.post("", response_model=ModelRunOverviewResponse)
@@ -233,34 +236,28 @@ def _get_channels_by_type(
     model_type: str,
     session: Session,
 ) -> TableResponse[ChannelMetricRow]:
-    """Shared logic: fetch attribution rows filtered by model_type, add first/last click."""
-    import pandas as pd
+    """Shared logic: fetch consolidated channel metrics."""
     _ensure_run_exists(model_run_id, session)
-    attribution = get_model_run_table(model_run_id, "attribution_results", session=session)
+    metrics = get_model_run_table(model_run_id, "channel_metrics", session=session)
 
-    if not attribution.empty and "model_type" in attribution.columns:
-        primary = attribution[attribution["model_type"] == model_type]
-        # Fallback to raw if requested type doesn't exist
+    if not metrics.empty and "model_type" in metrics.columns:
+        primary = metrics[metrics["model_type"] == model_type]
         if primary.empty and model_type != "raw":
-            primary = attribution[attribution["model_type"] == "raw"]
-    else:
-        primary = attribution
+            primary = metrics[metrics["model_type"] == "raw"]
+        records: list[dict] = [] if primary.empty else primary.to_dict("records")
+        return TableResponse[ChannelMetricRow](
+            model_run_id=model_run_id,
+            table="channel_metrics",
+            rows=_rows_to_models(records, ChannelMetricRow),
+            total_count=len(records),
+        )
 
-    transitions = get_model_run_table(model_run_id, "transition_counts", session=session)
-    spend_df = (
-        primary[["channel", "spend"]].copy()
-        if not primary.empty and "spend" in primary.columns
-        else pd.DataFrame(columns=["channel", "spend"])
-    )
-    first_last = compute_first_last_click_roas(transitions, spend_df)
-    if not first_last.empty and not primary.empty:
-        primary = primary.merge(first_last, on="channel", how="left")
-
-    records: list[dict] = [] if primary.empty else primary.to_dict("records")
+    records: list[dict] = []
     return TableResponse[ChannelMetricRow](
         model_run_id=model_run_id,
-        table="attribution_results",
+        table="channel_metrics",
         rows=_rows_to_models(records, ChannelMetricRow),
+        total_count=len(records),
     )
 
 
@@ -272,7 +269,7 @@ def get_channels(
     """Primary attribution — funnel model when active, raw otherwise.
 
     Includes PFC fields (`pfc_weight`, `pfc_delta_pp`) when persisted on
-    AttributionResult; `None` otherwise.
+    ChannelMetric; `None` otherwise.
     """
     return _get_channels_by_type(model_run_id, "funnel", session)
 
@@ -291,7 +288,16 @@ def get_diagnostics(
     model_run_id: int,
     session: Session = Depends(get_db_session),
 ) -> TableResponse[DiagnosticRow]:
-    return _typed_table_response(model_run_id, "channel_diagnostics", session, DiagnosticRow)
+    _ensure_run_exists(model_run_id, session)
+    metrics = _primary_channel_metric_rows(model_run_id, session)
+    if metrics:
+        return TableResponse[DiagnosticRow](
+            model_run_id=model_run_id,
+            table="channel_metrics",
+            rows=[DiagnosticRow.model_validate(_orm_public_dict(row)) for row in metrics],
+            total_count=len(metrics),
+        )
+    return TableResponse[DiagnosticRow](model_run_id=model_run_id, table="channel_metrics", rows=[], total_count=0)
 
 
 @router.get("/{model_run_id}/insights", response_model=TableResponse[InsightRow])
@@ -300,8 +306,8 @@ def get_insights(
     session: Session = Depends(get_db_session),
 ) -> TableResponse[InsightRow]:
     _ensure_run_exists(model_run_id, session)
-    attribution = get_model_run_table(model_run_id, "attribution_results", session=session)
-    transitions = get_model_run_table(model_run_id, "transition_counts", session=session)
+    attribution = get_model_run_table(model_run_id, "channel_metrics", session=session)
+    transitions = _transition_counts_df(model_run_id, session)
     touchpoints = compute_touchpoint_metrics(transitions)
     insights = generate_channel_insights(attribution, touchpoints)
     records: list[dict] = [] if insights.empty else insights.to_dict("records")
@@ -318,7 +324,7 @@ def get_touchpoints(
     session: Session = Depends(get_db_session),
 ) -> TableResponse[TouchpointRow]:
     _ensure_run_exists(model_run_id, session)
-    transitions = get_model_run_table(model_run_id, "transition_counts", session=session)
+    transitions = _transition_counts_df(model_run_id, session)
     touchpoints = compute_touchpoint_metrics(transitions)
     records: list[dict] = [] if touchpoints.empty else touchpoints.to_dict("records")
     return TableResponse[TouchpointRow](
@@ -331,34 +337,80 @@ def get_touchpoints(
 @router.get("/{model_run_id}/transitions", response_model=TableResponse[TransitionRow])
 def get_transitions(
     model_run_id: int,
+    transition_type: str | None = None,
+    limit: int = Query(100, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
     session: Session = Depends(get_db_session),
 ) -> TableResponse[TransitionRow]:
-    return _typed_table_response(model_run_id, "transition_counts", session, TransitionRow)
+    _ensure_run_exists(model_run_id, session)
+    clauses = [TransitionEdge.model_run_id == model_run_id]
+    if transition_type:
+        clauses.append(TransitionEdge.transition_type == transition_type)
+    else:
+        clauses.append(TransitionEdge.transition_type != "matrix")
+    total_count = session.scalar(select(func.count()).select_from(TransitionEdge).where(*clauses)) or 0
+    rows = session.execute(
+        select(TransitionEdge)
+        .where(*clauses)
+        .order_by(TransitionEdge.transition_type.asc(), TransitionEdge.count.desc().nullslast(), TransitionEdge.id.asc())
+        .limit(limit)
+        .offset(offset)
+    ).scalars().all()
+    if rows:
+        records = [_transition_edge_public_dict(row) for row in rows]
+        return TableResponse[TransitionRow](
+            model_run_id=model_run_id,
+            table="transition_edges",
+            rows=_rows_to_models(records, TransitionRow),
+            total_count=total_count,
+            limit=limit,
+            offset=offset,
+        )
+    return TableResponse[TransitionRow](
+        model_run_id=model_run_id,
+        table="transition_edges",
+        rows=[],
+        total_count=0,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get("/{model_run_id}/paths", response_model=TableResponse[PathRow])
 def get_paths(
     model_run_id: int,
+    limit: int = Query(100, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
     session: Session = Depends(get_db_session),
 ) -> TableResponse[PathRow]:
-    return _typed_table_response(model_run_id, "path_summary", session, PathRow)
+    return _typed_table_response(model_run_id, "path_summary", session, PathRow, limit=limit, offset=offset)
 
 
 @router.get("/{model_run_id}/loops", response_model=TableResponse[PathRow])
 def get_loops(
     model_run_id: int,
+    limit: int = Query(100, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
     session: Session = Depends(get_db_session),
 ) -> TableResponse[PathRow]:
     _ensure_run_exists(model_run_id, session)
-    paths = get_model_run_table(model_run_id, "path_summary", session=session)
-    if paths.empty or "contains_loop" not in paths.columns:
-        records: list[dict] = []
-    else:
-        records = paths[paths["contains_loop"].fillna(0).astype(int) == 1].to_dict("records")
+    clauses = [PathSummary.model_run_id == model_run_id, PathSummary.contains_loop == 1]
+    total_count = session.scalar(select(func.count()).select_from(PathSummary).where(*clauses)) or 0
+    rows = session.execute(
+        select(PathSummary)
+        .where(*clauses)
+        .order_by(PathSummary.count.desc().nullslast(), PathSummary.id.asc())
+        .limit(limit)
+        .offset(offset)
+    ).scalars().all()
+    records = [_orm_public_dict(row) for row in rows]
     return TableResponse[PathRow](
         model_run_id=model_run_id,
         table="loops",
         rows=_rows_to_models(records, PathRow),
+        total_count=total_count,
+        limit=limit,
+        offset=offset,
     )
 
 
@@ -367,8 +419,8 @@ def get_graph(
     model_run_id: int,
     session: Session = Depends(get_db_session),
 ):
-    transitions = get_model_run_table(model_run_id, "transition_counts", session=session)
-    matrix = get_model_run_table(model_run_id, "transition_matrix", session=session)
+    transitions = _transition_counts_df(model_run_id, session)
+    matrix = _transition_matrix_df(model_run_id, session)
     if transitions.empty and matrix.empty:
         _ensure_run_exists(model_run_id, session)
     return build_journey_graph(transitions, matrix)
@@ -531,7 +583,7 @@ def get_funnel_validation(
             model_run_id=model_run_id, table="funnel_validation", rows=[]
         )
 
-    raw_df = get_model_run_table(model_run_id, "attribution_results", session=session)
+    raw_df = get_model_run_table(model_run_id, "channel_metrics", session=session)
     raw_map: dict = {}
     if not raw_df.empty and "model_type" in raw_df.columns:
         raw_rows = raw_df[raw_df["model_type"] == "raw"]
@@ -564,20 +616,33 @@ def get_sequential_effects(
     model_run_id: int,
     previous_channel: str | None = None,
     label: str | None = None,
+    limit: int = Query(100, ge=1, le=MAX_PAGE_SIZE),
+    offset: int = Query(0, ge=0),
     session: Session = Depends(get_db_session),
 ) -> TableResponse[SequentialEffectRow]:
     """Order-2 conditional conversion probabilities for all bigram pairs."""
     _ensure_run_exists(model_run_id, session)
-    df = get_model_run_table(model_run_id, "sequential_effects", session=session)
-    if not df.empty and previous_channel:
-        df = df[df["previous_channel"] == previous_channel]
-    if not df.empty and label:
-        df = df[df["diagnostic_label"] == label]
-    records: list[dict] = [] if df.empty else df.to_dict("records")
+    clauses = [SequentialEffect.model_run_id == model_run_id]
+    if previous_channel:
+        clauses.append(SequentialEffect.previous_channel == previous_channel)
+    if label:
+        clauses.append(SequentialEffect.diagnostic_label == label)
+    total_count = session.scalar(select(func.count()).select_from(SequentialEffect).where(*clauses)) or 0
+    rows = session.execute(
+        select(SequentialEffect)
+        .where(*clauses)
+        .order_by(SequentialEffect.lift_vs_baseline.desc().nullslast(), SequentialEffect.id.asc())
+        .limit(limit)
+        .offset(offset)
+    ).scalars().all()
+    records = [_orm_public_dict(row) for row in rows]
     return TableResponse[SequentialEffectRow](
         model_run_id=model_run_id,
         table="sequential_effects",
         rows=_rows_to_models(records, SequentialEffectRow),
+        total_count=total_count,
+        limit=limit,
+        offset=offset,
     )
 
 
@@ -717,27 +782,29 @@ def _delta(value: float | None, compare_value: float | None) -> MetricDelta:
     return MetricDelta(value=diff, pct=pct)
 
 
-def _primary_attribution_rows(model_run_id: int, session: Session) -> list[AttributionResult]:
+def _primary_channel_metric_rows(model_run_id: int, session: Session) -> list[ChannelMetric]:
     run = session.get(ModelRun, model_run_id)
     preferred = "funnel" if run and run.funnel_model_active else "raw"
     rows = session.execute(
-        select(AttributionResult).where(
-            AttributionResult.model_run_id == model_run_id,
-            AttributionResult.model_type == preferred,
+        select(ChannelMetric).where(
+            ChannelMetric.model_run_id == model_run_id,
+            ChannelMetric.model_type == preferred,
         )
     ).scalars().all()
     if rows:
         return rows
     return session.execute(
-        select(AttributionResult).where(AttributionResult.model_run_id == model_run_id)
+        select(ChannelMetric).where(ChannelMetric.model_run_id == model_run_id)
     ).scalars().all()
 
 
-def _diagnostic_map(model_run_id: int, session: Session) -> dict[str, ChannelDiagnostic]:
-    rows = session.execute(
-        select(ChannelDiagnostic).where(ChannelDiagnostic.model_run_id == model_run_id)
-    ).scalars().all()
-    return {row.channel: row for row in rows}
+def _primary_attribution_rows(model_run_id: int, session: Session) -> list[ChannelMetric]:
+    return _primary_channel_metric_rows(model_run_id, session)
+
+
+def _diagnostic_map(model_run_id: int, session: Session) -> dict[str, ChannelMetric]:
+    metrics = _primary_channel_metric_rows(model_run_id, session)
+    return {row.channel: row for row in metrics}
 
 
 def _top_paths(model_run_id: int, session: Session) -> list[PathSummary]:
@@ -749,14 +816,17 @@ def _top_paths(model_run_id: int, session: Session) -> list[PathSummary]:
     ).scalars().all()
 
 
-def _transition_rows(model_run_id: int, session: Session) -> list[TransitionCount]:
+def _transition_rows(model_run_id: int, session: Session) -> list[TransitionEdge]:
     return session.execute(
-        select(TransitionCount).where(TransitionCount.model_run_id == model_run_id)
+        select(TransitionEdge).where(
+            TransitionEdge.model_run_id == model_run_id,
+            TransitionEdge.transition_type != "matrix",
+        )
     ).scalars().all()
 
 
 def _consensus_matrix(
-    metrics: list[AttributionResult],
+    metrics: list[ChannelMetric],
     recs: list[ChannelRecommendationRow],
 ) -> ConsensusMatrixData:
     tones = {rec.channel: rec.recommendation_tone for rec in recs}
@@ -778,7 +848,7 @@ def _consensus_matrix(
 
 
 def _journey_summary(
-    transitions: list[TransitionCount],
+    transitions: list[TransitionEdge],
     paths: list[PathSummary],
 ) -> JourneySummaryData:
     converting = [row for row in transitions if row.transition_type == "converting"]
@@ -884,7 +954,7 @@ def _budget_summary_cards(recs: list[ChannelRecommendationRow]) -> list[BudgetSu
 
 
 def _allocation_matrix(
-    metrics: list[AttributionResult],
+    metrics: list[ChannelMetric],
     recs: list[ChannelRecommendationRow],
     summary: ModelRunSummary,
 ) -> list[AllocationPointData]:
@@ -909,9 +979,9 @@ def _allocation_matrix(
 
 
 def _budget_channel_rows(
-    metrics: list[AttributionResult],
+    metrics: list[ChannelMetric],
     recs: list[ChannelRecommendationRow],
-    diagnostics: dict[str, ChannelDiagnostic],
+    diagnostics: dict[str, ChannelMetric],
 ) -> list[BudgetChannelRow]:
     rec_map = {rec.channel: rec for rec in recs}
     rows: list[BudgetChannelRow] = []
@@ -920,7 +990,7 @@ def _budget_channel_rows(
         diagnostic = diagnostics.get(metric.channel)
         markov = metric.markov_weight or 0.0
         shapley = metric.shapley_weight or 0.0
-        consensus = max(0.0, min(1.0, 1.0 - abs(markov - shapley) * 5.0))
+        consensus = max(0.0, min(1.0, 1.0 - abs(markov - shapley) * CONSENSUS_DELTA_MULTIPLIER))
         presence = max(
             diagnostic.presence_converting or 0.0 if diagnostic else 0.0,
             diagnostic.presence_nonconverting or 0.0 if diagnostic else 0.0,
@@ -979,6 +1049,52 @@ def _clean_row(row: dict) -> dict:
     return cleaned
 
 
+def _transition_edge_public_dict(row: TransitionEdge) -> dict:
+    data = _orm_public_dict(row)
+    data["n"] = row.count
+    data["total_revenue"] = row.revenue
+    return data
+
+
+def _transition_counts_df(model_run_id: int, session: Session):
+    import pandas as pd
+
+    edges = session.execute(
+        select(TransitionEdge).where(
+            TransitionEdge.model_run_id == model_run_id,
+            TransitionEdge.transition_type != "matrix",
+        )
+    ).scalars().all()
+    if edges:
+        records = [
+            {
+                "from_state": row.from_state,
+                "to_state": row.to_state,
+                "n": row.count,
+                "total_revenue": row.revenue,
+                "transition_type": row.transition_type,
+            }
+            for row in edges
+        ]
+        return pd.DataFrame(records)
+    return get_model_run_table(model_run_id, "transition_counts", session=session)
+
+
+def _transition_matrix_df(model_run_id: int, session: Session):
+    import pandas as pd
+
+    edges = session.execute(
+        select(TransitionEdge).where(
+            TransitionEdge.model_run_id == model_run_id,
+            TransitionEdge.transition_type == "matrix",
+        )
+    ).scalars().all()
+    if edges:
+        records = [_transition_edge_public_dict(row) for row in edges]
+        return pd.DataFrame(records)
+    return get_model_run_table(model_run_id, "transition_matrix", session=session)
+
+
 def _orm_public_dict(row: object) -> dict:
     data = {}
     for column in row.__table__.columns:  # type: ignore[attr-defined]
@@ -998,15 +1114,39 @@ def _typed_table_response(
     table: str,
     session: Session,
     row_model: type[BaseModel],
+    limit: int | None = None,
+    offset: int = 0,
 ) -> TableResponse:
     """Generic helper: fetch table, validate rows against `row_model`, return TableResponse."""
     _ensure_run_exists(model_run_id, session)
-    df = get_model_run_table(model_run_id, table, session=session)
-    records: list[dict] = [] if df.empty else df.to_dict("records")
+    model_by_table = {
+        "path_summary": PathSummary,
+    }
+    model = model_by_table.get(table)
+    total_count = None
+    if model is not None and limit is not None:
+        total_count = session.scalar(
+            select(func.count()).select_from(model).where(model.model_run_id == model_run_id)
+        ) or 0
+        rows = session.execute(
+            select(model)
+            .where(model.model_run_id == model_run_id)
+            .order_by(model.count.desc().nullslast(), model.id.asc())
+            .limit(limit)
+            .offset(offset)
+        ).scalars().all()
+        records = [_orm_public_dict(row) for row in rows]
+    else:
+        df = get_model_run_table(model_run_id, table, session=session)
+        records = [] if df.empty else df.to_dict("records")
+        total_count = len(records)
     return TableResponse[row_model](  # type: ignore[valid-type]
         model_run_id=model_run_id,
         table=table,
         rows=_rows_to_models(records, row_model),
+        total_count=total_count,
+        limit=limit,
+        offset=offset if limit is not None else None,
     )
 
 

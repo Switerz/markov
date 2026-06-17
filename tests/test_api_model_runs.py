@@ -22,6 +22,7 @@ def test_model_run_read_endpoints_return_persisted_data(tmp_path):
     insights = client.get(f"/model-runs/{model_run_id}/insights")
     touchpoints = client.get(f"/model-runs/{model_run_id}/touchpoints")
     transitions = client.get(f"/model-runs/{model_run_id}/transitions")
+    transitions_page = client.get(f"/model-runs/{model_run_id}/transitions?limit=2&offset=0")
     paths = client.get(f"/model-runs/{model_run_id}/paths")
     graph = client.get(f"/model-runs/{model_run_id}/graph")
     data_quality = client.get(f"/model-runs/{model_run_id}/data-quality")
@@ -38,6 +39,9 @@ def test_model_run_read_endpoints_return_persisted_data(tmp_path):
     assert touchpoints.status_code == 200
     assert touchpoints.json()["rows"]
     assert transitions.status_code == 200
+    assert transitions_page.status_code == 200
+    assert transitions_page.json()["total_count"] >= len(transitions_page.json()["rows"])
+    assert len(transitions_page.json()["rows"]) <= 2
     assert paths.status_code == 200
     assert graph.status_code == 200
     assert graph.json()["nodes"]

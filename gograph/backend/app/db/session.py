@@ -35,6 +35,8 @@ def create_db_and_tables(database_url: str | None = None) -> None:
 
 def _apply_migrations(engine) -> None:
     """Idempotent column additions for schema evolution without Alembic."""
+    if engine.dialect.name != "sqlite":
+        return
     _add_column_if_missing(engine, "attribution_results", "pfc_weight", "FLOAT")
     _add_column_if_missing(engine, "attribution_results", "pfc_delta_pp", "FLOAT")
     _add_column_if_missing(engine, "data_quality_checks", "score", "FLOAT")
@@ -57,6 +59,8 @@ def _add_column_if_missing(engine, table: str, column: str, col_type: str) -> No
             __import__("sqlalchemy").text(f"PRAGMA table_info({table})")
         )
         existing = {row[1] for row in result}
+        if not existing:
+            return
         if column not in existing:
             conn.execute(
                 __import__("sqlalchemy").text(

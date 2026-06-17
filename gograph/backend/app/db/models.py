@@ -29,19 +29,11 @@ class ModelRun(Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     funnel_model_active: Mapped[bool] = mapped_column(Integer, default=0)
 
-    transition_counts: Mapped[list["TransitionCount"]] = relationship(
+    transition_edges: Mapped[list["TransitionEdge"]] = relationship(
         back_populates="model_run",
         cascade="all, delete-orphan",
     )
-    transition_matrix: Mapped[list["TransitionMatrixEntry"]] = relationship(
-        back_populates="model_run",
-        cascade="all, delete-orphan",
-    )
-    attribution_results: Mapped[list["AttributionResult"]] = relationship(
-        back_populates="model_run",
-        cascade="all, delete-orphan",
-    )
-    channel_diagnostics: Mapped[list["ChannelDiagnostic"]] = relationship(
+    channel_metrics: Mapped[list["ChannelMetric"]] = relationship(
         back_populates="model_run",
         cascade="all, delete-orphan",
     )
@@ -177,63 +169,66 @@ class ModelRunLog(Base):
     model_run: Mapped["ModelRun"] = relationship(back_populates="logs")
 
 
-class TransitionCount(Base):
-    __tablename__ = "transition_counts"
+class TransitionEdge(Base):
+    __tablename__ = "transition_edges"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    model_run_id: Mapped[int] = mapped_column(ForeignKey("model_runs.id"), index=True)
+    model_run_id: Mapped[int] = mapped_column(
+        ForeignKey("model_runs.id", ondelete="CASCADE"),
+        index=True,
+    )
     from_state: Mapped[str] = mapped_column(String(255), index=True)
     to_state: Mapped[str] = mapped_column(String(255), index=True)
-    n: Mapped[float] = mapped_column(Float)
-    total_revenue: Mapped[float | None] = mapped_column(Float, nullable=True)
     transition_type: Mapped[str] = mapped_column(String(32), index=True)
+    count: Mapped[float | None] = mapped_column(Float, nullable=True)
+    probability: Mapped[float | None] = mapped_column(Float, nullable=True)
+    revenue: Mapped[float | None] = mapped_column(Float, nullable=True)
+    avg_ticket: Mapped[float | None] = mapped_column(Float, nullable=True)
+    is_self_loop: Mapped[int] = mapped_column(Integer, default=0, index=True)
 
-    model_run: Mapped[ModelRun] = relationship(back_populates="transition_counts")
+    model_run: Mapped[ModelRun] = relationship(back_populates="transition_edges")
+
+    @property
+    def n(self) -> float | None:
+        return self.count
+
+    @property
+    def total_revenue(self) -> float | None:
+        return self.revenue
 
 
-class TransitionMatrixEntry(Base):
-    __tablename__ = "transition_matrix"
+class ChannelMetric(Base):
+    __tablename__ = "channel_metrics"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    model_run_id: Mapped[int] = mapped_column(ForeignKey("model_runs.id"), index=True)
-    from_state: Mapped[str] = mapped_column(String(255), index=True)
-    to_state: Mapped[str] = mapped_column(String(255), index=True)
-    probability: Mapped[float] = mapped_column(Float)
-
-    model_run: Mapped[ModelRun] = relationship(back_populates="transition_matrix")
-
-
-class AttributionResult(Base):
-    __tablename__ = "attribution_results"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    model_run_id: Mapped[int] = mapped_column(ForeignKey("model_runs.id"), index=True)
-    # 'raw' = Raw Channel Markov  |  'funnel' = Funnel Stage Markov (aggregated by channel)
+    model_run_id: Mapped[int] = mapped_column(
+        ForeignKey("model_runs.id", ondelete="CASCADE"),
+        index=True,
+    )
     model_type: Mapped[str] = mapped_column(String(16), default="raw", index=True)
     channel: Mapped[str] = mapped_column(String(255), index=True)
+    spend: Mapped[float | None] = mapped_column(Float, nullable=True)
+    spend_share: Mapped[float | None] = mapped_column(Float, nullable=True)
     markov_weight: Mapped[float | None] = mapped_column(Float, nullable=True)
     markov_revenue: Mapped[float | None] = mapped_column(Float, nullable=True)
+    markov_revenue_share: Mapped[float | None] = mapped_column(Float, nullable=True)
     removal_effect: Mapped[float | None] = mapped_column(Float, nullable=True)
     shapley_weight: Mapped[float | None] = mapped_column(Float, nullable=True)
     shapley_revenue: Mapped[float | None] = mapped_column(Float, nullable=True)
+    shapley_revenue_share: Mapped[float | None] = mapped_column(Float, nullable=True)
     shapley_value: Mapped[float | None] = mapped_column(Float, nullable=True)
-    spend: Mapped[float | None] = mapped_column(Float, nullable=True)
     roas_markov: Mapped[float | None] = mapped_column(Float, nullable=True)
     roas_shapley: Mapped[float | None] = mapped_column(Float, nullable=True)
+    first_click_revenue: Mapped[float | None] = mapped_column(Float, nullable=True)
+    last_click_revenue: Mapped[float | None] = mapped_column(Float, nullable=True)
+    first_click_roas: Mapped[float | None] = mapped_column(Float, nullable=True)
+    last_click_roas: Mapped[float | None] = mapped_column(Float, nullable=True)
     pfc_weight: Mapped[float | None] = mapped_column(Float, nullable=True)
     pfc_delta_pp: Mapped[float | None] = mapped_column(Float, nullable=True)
-    recommendation: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    consensus_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
-
-    model_run: Mapped[ModelRun] = relationship(back_populates="attribution_results")
-
-
-class ChannelDiagnostic(Base):
-    __tablename__ = "channel_diagnostics"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    model_run_id: Mapped[int] = mapped_column(ForeignKey("model_runs.id"), index=True)
-    channel: Mapped[str] = mapped_column(String(255), index=True)
+    recommendation: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    recommendation_tone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     channel_role: Mapped[str | None] = mapped_column(String(255), nullable=True)
     touchpoint_role: Mapped[str | None] = mapped_column(String(255), nullable=True)
     presence_converting: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -241,14 +236,17 @@ class ChannelDiagnostic(Base):
     first_touch_share: Mapped[float | None] = mapped_column(Float, nullable=True)
     middle_touch_share: Mapped[float | None] = mapped_column(Float, nullable=True)
     last_touch_share: Mapped[float | None] = mapped_column(Float, nullable=True)
+    starter_count: Mapped[float | None] = mapped_column(Float, nullable=True)
     assist_count: Mapped[float | None] = mapped_column(Float, nullable=True)
     closer_count: Mapped[float | None] = mapped_column(Float, nullable=True)
-    starter_count: Mapped[float | None] = mapped_column(Float, nullable=True)
+    dropoff_after_touch: Mapped[float | None] = mapped_column(Float, nullable=True)
     markov_shapley_delta_pp: Mapped[float | None] = mapped_column(Float, nullable=True)
     diagnostic_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
     diagnostic_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    model_run: Mapped[ModelRun] = relationship(back_populates="channel_diagnostics")
+    model_run: Mapped[ModelRun] = relationship(back_populates="channel_metrics")
+
+    __table_args__ = (UniqueConstraint("model_run_id", "model_type", "channel"),)
 
 
 class PathSummary(Base):
@@ -376,9 +374,10 @@ ModelRun.scenarios = relationship(
     cascade="all, delete-orphan",
 )
 
-Index("ix_transition_counts_run_type", TransitionCount.model_run_id, TransitionCount.transition_type)
-Index("ix_attribution_results_run_channel", AttributionResult.model_run_id, AttributionResult.channel)
-Index("ix_channel_diagnostics_run_channel", ChannelDiagnostic.model_run_id, ChannelDiagnostic.channel)
+Index("ix_transition_edges_run_from", TransitionEdge.model_run_id, TransitionEdge.from_state)
+Index("ix_transition_edges_run_to", TransitionEdge.model_run_id, TransitionEdge.to_state)
+Index("ix_transition_edges_run_type", TransitionEdge.model_run_id, TransitionEdge.transition_type)
+Index("ix_channel_metrics_run_channel", ChannelMetric.model_run_id, ChannelMetric.channel)
 Index("ix_model_run_inputs_run_query", ModelRunInput.model_run_id, ModelRunInput.query_name)
 Index("ix_model_run_logs_run_created", ModelRunLog.model_run_id, ModelRunLog.created_at)
 

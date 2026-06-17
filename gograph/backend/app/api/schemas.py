@@ -49,6 +49,9 @@ class TableResponse(BaseModel, Generic[RowT]):
     model_run_id: int
     table: str
     rows: list[RowT] = Field(default_factory=list)
+    total_count: Optional[int] = None
+    limit: Optional[int] = None
+    offset: Optional[int] = None
 
 
 # ---------------------------------------------------------------------------

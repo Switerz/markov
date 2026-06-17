@@ -13,8 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from gograph.backend.app.db.models import (
-    AttributionResult,
-    ChannelDiagnostic,
+    ChannelMetric,
     ChannelRecommendation,
     DataQualityCheck,
     ExportRecord,
@@ -27,8 +26,7 @@ from gograph.backend.app.db.models import (
     PathSummary,
     SequentialEffect,
     SessionQuality,
-    TransitionCount,
-    TransitionMatrixEntry,
+    TransitionEdge,
 )
 from gograph.backend.app.db.session import (
     create_db_and_tables,
@@ -36,8 +34,12 @@ from gograph.backend.app.db.session import (
 )
 from gograph.backend.app.schemas import ModelRunResult
 from gograph.backend.app.services.recommendation_service import derive_recommendations
+from gograph.backend.app.services.roas_service import compute_first_last_click_roas
 from gograph.backend.app.services.summary_service import compute_summary
 from gograph.backend.app.services.log_service import insert_log
+
+# Converts absolute Markov/Shapley weight delta into a 0-1 agreement score.
+CONSENSUS_DELTA_MULTIPLIER = 5.0
 
 
 def _clean_value(value: Any) -> Any:
@@ -57,6 +59,11 @@ def _row_value(row: pd.Series, name: str, default: Any = None) -> Any:
 def _df_records(df: pd.DataFrame) -> Iterable[pd.Series]:
     for _, row in df.iterrows():
         yield row
+
+
+def _transition_count_items(result: ModelRunResult):
+    transition_counts = getattr(result, "transition_counts", None)
+    return transition_counts.items() if isinstance(transition_counts, dict) else []
 
 
 @contextmanager
@@ -132,17 +139,13 @@ def save_model_run(
         model_run.funnel_model_active = int(result.funnel_model_active)
     session.flush()
 
-    _save_transition_counts(session, model_run.id, result)
-    _save_transition_matrix(session, model_run.id, result.transition_matrix)
-    # Primary attribution (funnel when active, raw otherwise)
+    _save_transition_edges(session, model_run.id, result)
     model_type = "funnel" if result.funnel_model_active else "raw"
-    _save_attribution_results(session, model_run.id, result.roas_results, model_type=model_type)
-    # Always persist raw baseline for comparison
+    _save_channel_metrics(session, model_run.id, result.roas_results, result.diagnostics, result, model_type=model_type)
     if result.funnel_model_active and result.raw_markov_results is not None:
         raw_roas = _build_raw_roas_for_persistence(result)
         if raw_roas is not None:
-            _save_attribution_results(session, model_run.id, raw_roas, model_type="raw")
-    _save_channel_diagnostics(session, model_run.id, result.roas_results, result.diagnostics)
+            _save_channel_metrics(session, model_run.id, raw_roas, result.diagnostics, result, model_type="raw")
     _save_path_summary(session, model_run.id, result.top_paths)
     _save_data_quality(session, model_run.id, result.data_quality)
     if result.loop_diagnostics is not None and not result.loop_diagnostics.empty:
@@ -153,10 +156,11 @@ def save_model_run(
         _save_sequential_effects(session, model_run.id, result.sequential_effects)
     if result.session_quality is not None and not result.session_quality.empty:
         _save_session_quality(session, model_run.id, result.session_quality)
+    transition_rows = dict(_transition_count_items(result))
     summary = compute_summary(
         channel_rows=result.roas_results,
         path_rows=result.top_paths,
-        transition_rows=result.transition_counts,
+        transition_rows=transition_rows,
         states=result.states,
         observed_rate=result.observed_conversion_rate,
         model_rate=result.model_conversion_rate,
@@ -271,11 +275,18 @@ def get_model_run_table(
         with session_scope(database_url=database_url) as scoped_session:
             return get_model_run_table(model_run_id, table_name, scoped_session)
 
+    if table_name == "transition_counts":
+        return _transition_edges_as_counts_df(model_run_id, session)
+    if table_name == "transition_matrix":
+        return _transition_edges_as_matrix_df(model_run_id, session)
+    if table_name == "attribution_results":
+        table_name = "channel_metrics"
+    if table_name == "channel_diagnostics":
+        table_name = "channel_metrics"
+
     model_by_table = {
-        "transition_counts": TransitionCount,
-        "transition_matrix": TransitionMatrixEntry,
-        "attribution_results": AttributionResult,
-        "channel_diagnostics": ChannelDiagnostic,
+        "transition_edges": TransitionEdge,
+        "channel_metrics": ChannelMetric,
         "path_summary": PathSummary,
         "data_quality_checks": DataQualityCheck,
         "model_run_inputs": ModelRunInput,
@@ -300,15 +311,39 @@ def get_model_run_table(
     return pd.DataFrame([_model_to_public_dict(row) for row in rows])
 
 
+def _transition_edges_as_counts_df(model_run_id: int, session: Session) -> pd.DataFrame:
+    rows = session.execute(
+        select(TransitionEdge).where(
+            TransitionEdge.model_run_id == model_run_id,
+            TransitionEdge.transition_type != "matrix",
+        )
+    ).scalars().all()
+    records = []
+    for row in rows:
+        data = _model_to_public_dict(row)
+        data["n"] = row.count
+        data["total_revenue"] = row.revenue
+        records.append(data)
+    return pd.DataFrame(records)
+
+
+def _transition_edges_as_matrix_df(model_run_id: int, session: Session) -> pd.DataFrame:
+    rows = session.execute(
+        select(TransitionEdge).where(
+            TransitionEdge.model_run_id == model_run_id,
+            TransitionEdge.transition_type == "matrix",
+        )
+    ).scalars().all()
+    return pd.DataFrame([_model_to_public_dict(row) for row in rows])
+
+
 def clear_database(database_url: str | None = None) -> None:
     """Wipes all rows from all tables in the database."""
     with session_scope(database_url=database_url) as session:
         # Deletar filhos primeiro para respeitar chaves estrangeiras
         models = [
-            TransitionCount,
-            TransitionMatrixEntry,
-            AttributionResult,
-            ChannelDiagnostic,
+            TransitionEdge,
+            ChannelMetric,
             PathSummary,
             DataQualityCheck,
             ModelRunSummary,
@@ -325,75 +360,157 @@ def clear_database(database_url: str | None = None) -> None:
         for model in models:
             session.query(model).delete()
 
-
-def _save_transition_counts(
+def _save_transition_edges(
     session: Session,
     model_run_id: int,
     result: ModelRunResult,
 ) -> None:
-    for transition_type, df in result.transition_counts.items():
+    for transition_type, df in _transition_count_items(result):
+        if df is None or df.empty:
+            continue
         for row in _df_records(df):
             f_state = _row_value(row, "from_ch") or _row_value(row, "from_state")
             t_state = _row_value(row, "to_ch") or _row_value(row, "to_state")
+            count = float(_row_value(row, "n", 0.0) or 0.0)
+            revenue = _row_value(row, "total_revenue")
             session.add(
-                TransitionCount(
+                TransitionEdge(
                     model_run_id=model_run_id,
                     from_state=str(f_state) if f_state else "(start)",
                     to_state=str(t_state) if t_state else "Non-Conversion",
-                    n=float(_row_value(row, "n", 0.0) or 0.0),
-                    total_revenue=_row_value(row, "total_revenue"),
                     transition_type=transition_type,
+                    count=count,
+                    probability=None,
+                    revenue=revenue,
+                    avg_ticket=(float(revenue) / count) if revenue is not None and count else None,
+                    is_self_loop=int(bool(f_state and t_state and str(f_state) == str(t_state))),
                 )
             )
 
-
-def _save_transition_matrix(
-    session: Session,
-    model_run_id: int,
-    matrix: pd.DataFrame,
-) -> None:
+    matrix = getattr(result, "transition_matrix", None)
+    if matrix is None or matrix.empty:
+        return
     for from_state, row in matrix.iterrows():
         for to_state, probability in row.items():
             prob = _clean_value(probability)
             if prob is None or float(prob) == 0.0:
                 continue
             session.add(
-                TransitionMatrixEntry(
+                TransitionEdge(
                     model_run_id=model_run_id,
                     from_state=str(from_state),
                     to_state=str(to_state),
+                    transition_type="matrix",
+                    count=None,
                     probability=float(prob),
+                    revenue=None,
+                    avg_ticket=None,
+                    is_self_loop=int(str(from_state) == str(to_state)),
                 )
             )
 
-
-def _save_attribution_results(
+def _save_channel_metrics(
     session: Session,
     model_run_id: int,
     roas_results: pd.DataFrame,
+    diagnostics: pd.DataFrame,
+    result: ModelRunResult,
     model_type: str = "raw",
 ) -> None:
-    for row in _df_records(roas_results):
+    if roas_results.empty:
+        return
+
+    transition_rows = []
+    for transition_type, df in _transition_count_items(result):
+        if df is None or df.empty:
+            continue
+        if df.empty:
+            continue
+        normalized = df.rename(columns={"from_ch": "from_state", "to_ch": "to_state"}).copy()
+        normalized["transition_type"] = transition_type
+        transition_rows.append(normalized)
+    transitions_df = pd.concat(transition_rows, ignore_index=True) if transition_rows else pd.DataFrame()
+
+    metrics = roas_results.copy()
+    if not transitions_df.empty:
+        spend_df = (
+            metrics[["channel", "spend"]].copy()
+            if "spend" in metrics.columns
+            else pd.DataFrame(columns=["channel", "spend"])
+        )
+        first_last = compute_first_last_click_roas(transitions_df, spend_df)
+        if not first_last.empty:
+            metrics = metrics.merge(first_last, on="channel", how="left")
+
+    if not diagnostics.empty:
+        diag_cols = [col for col in diagnostics.columns if col != "channel" and col not in metrics.columns]
+        if diag_cols:
+            metrics = metrics.merge(diagnostics[["channel", *diag_cols]], on="channel", how="left")
+
+    total_spend = float(pd.to_numeric(metrics.get("spend"), errors="coerce").fillna(0).sum()) if "spend" in metrics else 0.0
+    total_markov = float(pd.to_numeric(metrics.get("markov_revenue"), errors="coerce").fillna(0).sum()) if "markov_revenue" in metrics else 0.0
+    total_shapley = float(pd.to_numeric(metrics.get("shapley_revenue"), errors="coerce").fillna(0).sum()) if "shapley_revenue" in metrics else 0.0
+
+    for row in _df_records(metrics):
         markov_weight = _row_value(row, "markov_weight", _row_value(row, "attribution_weight"))
         markov_revenue = _row_value(row, "markov_revenue", _row_value(row, "attributed_revenue"))
+        shapley_weight = _row_value(row, "shapley_weight")
+        shapley_revenue = _row_value(row, "shapley_revenue")
+        spend = _row_value(row, "spend")
+        consensus = None
+        if markov_weight is not None and shapley_weight is not None:
+            consensus = max(
+                0.0,
+                min(
+                    1.0,
+                    1.0 - abs(float(markov_weight) - float(shapley_weight)) * CONSENSUS_DELTA_MULTIPLIER,
+                ),
+            )
+        delta_pp = None
+        if markov_weight is not None and shapley_weight is not None:
+            delta_pp = (float(markov_weight) - float(shapley_weight)) * 100
+
         session.add(
-            AttributionResult(
+            ChannelMetric(
                 model_run_id=model_run_id,
                 model_type=model_type,
                 channel=str(_row_value(row, "channel")),
+                spend=spend,
+                spend_share=(float(spend) / total_spend) if spend is not None and total_spend else None,
                 markov_weight=markov_weight,
                 markov_revenue=markov_revenue,
+                markov_revenue_share=(float(markov_revenue) / total_markov) if markov_revenue is not None and total_markov else None,
                 removal_effect=_row_value(row, "removal_effect"),
-                shapley_weight=_row_value(row, "shapley_weight"),
-                shapley_revenue=_row_value(row, "shapley_revenue"),
+                shapley_weight=shapley_weight,
+                shapley_revenue=shapley_revenue,
+                shapley_revenue_share=(float(shapley_revenue) / total_shapley) if shapley_revenue is not None and total_shapley else None,
                 shapley_value=_row_value(row, "shapley_value"),
-                spend=_row_value(row, "spend"),
                 roas_markov=_row_value(row, "roas_markov"),
                 roas_shapley=_row_value(row, "roas_shapley"),
+                first_click_revenue=_row_value(row, "first_click_revenue"),
+                last_click_revenue=_row_value(row, "last_click_revenue"),
+                first_click_roas=_row_value(row, "first_click_roas"),
+                last_click_roas=_row_value(row, "last_click_roas"),
                 pfc_weight=_row_value(row, "pfc_weight"),
                 pfc_delta_pp=_row_value(row, "pfc_delta_pp"),
-                recommendation=_row_value(row, "recommendation"),
+                consensus_score=consensus,
                 confidence_score=_row_value(row, "confidence_score"),
+                recommendation=_row_value(row, "recommendation"),
+                recommendation_tone=_row_value(row, "recommendation_tone"),
+                channel_role=_row_value(row, "channel_role"),
+                touchpoint_role=_row_value(row, "touchpoint_role"),
+                presence_converting=_row_value(row, "presence_converting", _row_value(row, "conv_presence_share")),
+                presence_nonconverting=_row_value(row, "presence_nonconverting", _row_value(row, "nonconv_presence_share")),
+                first_touch_share=_row_value(row, "first_touch_share", _row_value(row, "conv_start_share")),
+                middle_touch_share=_row_value(row, "middle_touch_share", _row_value(row, "conv_middle_in_share")),
+                last_touch_share=_row_value(row, "last_touch_share", _row_value(row, "conv_last_share")),
+                starter_count=_row_value(row, "starter_count"),
+                assist_count=_row_value(row, "assist_count"),
+                closer_count=_row_value(row, "closer_count"),
+                dropoff_after_touch=_row_value(row, "dropoff_after_touch"),
+                markov_shapley_delta_pp=delta_pp,
+                diagnostic_label=_row_value(row, "diagnostic_label", _row_value(row, "presence_warning")),
+                diagnostic_text=_row_value(row, "diagnostic_text"),
             )
         )
 
@@ -415,41 +532,6 @@ def _build_raw_roas_for_persistence(result: "ModelRunResult") -> "pd.DataFrame |
         )
     except Exception:
         return None
-
-
-def _save_channel_diagnostics(
-    session: Session,
-    model_run_id: int,
-    roas_results: pd.DataFrame,
-    diagnostics: pd.DataFrame,
-) -> None:
-    source = roas_results if "channel_role" in roas_results.columns else diagnostics
-    for row in _df_records(source):
-        markov_weight = _row_value(row, "markov_weight", _row_value(row, "attribution_weight", 0.0))
-        shapley_weight = _row_value(row, "shapley_weight", 0.0)
-        delta_pp = None
-        if markov_weight is not None and shapley_weight is not None:
-            delta_pp = (float(markov_weight) - float(shapley_weight)) * 100
-        session.add(
-            ChannelDiagnostic(
-                model_run_id=model_run_id,
-                channel=str(_row_value(row, "channel")),
-                channel_role=_row_value(row, "channel_role"),
-                touchpoint_role=None,
-                presence_converting=_row_value(row, "conv_presence_share"),
-                presence_nonconverting=_row_value(row, "nonconv_presence_share"),
-                first_touch_share=_row_value(row, "conv_start_share"),
-                middle_touch_share=_row_value(row, "conv_middle_in_share"),
-                last_touch_share=_row_value(row, "conv_last_share"),
-                assist_count=None,
-                closer_count=None,
-                starter_count=None,
-                markov_shapley_delta_pp=delta_pp,
-                diagnostic_label=_row_value(row, "presence_warning"),
-                diagnostic_text=_row_value(row, "recommendation"),
-            )
-        )
-
 
 def _save_path_summary(
     session: Session,
@@ -707,10 +789,8 @@ def _update_model_run_status(
 
 def _clear_model_run_children(session: Session, model_run_id: int) -> None:
     for model in [
-        TransitionCount,
-        TransitionMatrixEntry,
-        AttributionResult,
-        ChannelDiagnostic,
+        TransitionEdge,
+        ChannelMetric,
         PathSummary,
         DataQualityCheck,
         ModelRunSummary,

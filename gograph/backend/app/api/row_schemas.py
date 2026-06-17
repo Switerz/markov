@@ -21,7 +21,7 @@ _ROW_CONFIG = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 class ChannelMetricRow(BaseModel):
-    """Row for `/channels` and `/raw-channels` (attribution_results + ROAS merge)."""
+    """Row for `/channels` and `/raw-channels` (channel_metrics)."""
 
     model_config = _ROW_CONFIG
 
@@ -29,11 +29,14 @@ class ChannelMetricRow(BaseModel):
     model_type: Optional[str] = None
     markov_weight: Optional[float] = None
     markov_revenue: Optional[float] = None
+    markov_revenue_share: Optional[float] = None
     removal_effect: Optional[float] = None
     shapley_weight: Optional[float] = None
     shapley_revenue: Optional[float] = None
+    shapley_revenue_share: Optional[float] = None
     shapley_value: Optional[float] = None
     spend: Optional[float] = None
+    spend_share: Optional[float] = None
     roas_markov: Optional[float] = None
     roas_shapley: Optional[float] = None
     first_click_revenue: Optional[float] = None
@@ -42,7 +45,9 @@ class ChannelMetricRow(BaseModel):
     last_click_roas: Optional[float] = None
     pfc_weight: Optional[float] = None
     pfc_delta_pp: Optional[float] = None
+    consensus_score: Optional[float] = None
     recommendation: Optional[str] = None
+    recommendation_tone: Optional[str] = None
     confidence_score: Optional[float] = None
 
 
@@ -117,7 +122,7 @@ def recommendation_row_from_orm(row: object) -> ChannelRecommendationRow:
 
 
 class DiagnosticRow(BaseModel):
-    """Row for `/diagnostics` (channel_diagnostics)."""
+    """Row for `/diagnostics` (diagnostic fields projected from channel_metrics)."""
 
     model_config = _ROW_CONFIG
 
@@ -154,7 +159,7 @@ class InsightRow(BaseModel):
 
 
 class TouchpointRow(BaseModel):
-    """Row for `/touchpoints` — derived from transition_counts."""
+    """Row for `/touchpoints` — derived from transition_edges."""
 
     model_config = _ROW_CONFIG
 
@@ -173,14 +178,19 @@ class TouchpointRow(BaseModel):
 
 
 class TransitionRow(BaseModel):
-    """Row for `/transitions` (transition_counts)."""
+    """Row for `/transitions` (transition_edges)."""
 
     model_config = _ROW_CONFIG
 
     from_state: str
     to_state: str
     n: Optional[float] = None
+    count: Optional[float] = None
     total_revenue: Optional[float] = None
+    revenue: Optional[float] = None
+    probability: Optional[float] = None
+    avg_ticket: Optional[float] = None
+    is_self_loop: Optional[int] = None
     transition_type: Optional[str] = None
 
 

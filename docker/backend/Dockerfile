@@ -22,11 +22,14 @@ COPY requirements.txt ./
 RUN pip install -r requirements.txt
 
 COPY . .
+RUN chmod +x docker/backend/entrypoint.sh
 
 EXPOSE 8000
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \
   CMD curl -fsS http://localhost:8000/health || exit 1
+
+ENTRYPOINT ["docker/backend/entrypoint.sh"]
 
 # Override em compose: --reload para dev
 CMD ["python", "-m", "uvicorn", "gograph.backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
