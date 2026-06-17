@@ -10,12 +10,62 @@ Cada bloco é um plano independente sob `docs/plans/`. Cada bloco termina com um
 |---|---|---|---|---|
 | 0 | **Dockerizar** (backend + frontend + DB) | [block-0-dockerize.md](./2026-06-16-backend-block-0-dockerize.md) | rascunho | — |
 | 1 | **Quick wins** (Pydantic strict + expose PFC/session_quality) | [block-1-quick-wins.md](./2026-06-16-backend-block-1-quick-wins.md) | rascunho | Block 0 |
-| 2 | **Overview & Budget agregados** (`model_run_summary`, `channel_recommendations`, novos endpoints `/dashboard/*`) | [block-2-overview-budget.md](./2026-06-16-backend-block-2-overview-budget.md) | rascunho | Block 1 |
-| 3 | **Lineage & Audit** (`model_run_inputs`, `model_run_logs`, Trust Center real) | [block-3-lineage-audit.md](./2026-06-16-backend-block-3-lineage-audit.md) | outline | Block 2 |
+| 2 | **Overview & Budget agregados** (`model_run_summary`, `channel_recommendations`, novos endpoints `/dashboard/*`) | [block-2-overview-budget.md](./2026-06-16-backend-block-2-overview-budget.md) | concluído | Block 1 |
+| 3 | **Lineage & Audit** (`model_run_inputs`, `model_run_logs`, Trust Center real) | [block-3-lineage-audit.md](./2026-06-16-backend-block-3-lineage-audit.md) | concluído | Block 2 |
 | 4 | **Sandbox real** (`scenarios` tipado + `scenario_graph` + `scenario_analysis` persistido) | [block-4-sandbox-real.md](./2026-06-16-backend-block-4-sandbox-real.md) | outline | Block 2 |
 | 5 | **Schema refinement + Postgres** (`channel_metrics` consolidado, `transition_edges` normalizado, Alembic + Postgres) | [block-5-schema-postgres.md](./2026-06-16-backend-block-5-schema-postgres.md) | outline | Blocks 1–4 |
 
 > Blocks 3 e 4 são paralelizáveis após Block 2. Block 5 é o último porque depende do schema final estar estável.
+
+## Status de entrega
+
+### Block 2 — Overview & Budget agregados
+
+Concluído em `2026-06-16`.
+
+Commits:
+- `99cff68 feat(model): persist run summaries and channel recommendations`
+- `f9b3599 feat(api): add overview and budget dashboard endpoints`
+- `f430edc feat(frontend): consume dashboard overview and budget APIs`
+
+Entregas:
+- Tabelas persistidas `model_run_summary` e `channel_recommendations`.
+- Services `summary_service` e `recommendation_service`.
+- Endpoints `GET /model-runs/{id}/summary`, `GET /model-runs/{id}/recommendations`, `GET /model-runs/{id}/dashboard/overview`, `GET /model-runs/{id}/dashboard/budget`.
+- `compare_run_id` validado server-side e retornando deltas no Overview.
+- Overview e Decisões de Budget consumindo endpoints reais com fallback para mock.
+
+Validação executada:
+- Backend: `.venv/bin/pytest -q` → `117 passed`
+- Frontend: `npm test -- --run` → `161 passed`
+- Frontend build: `npm run build` → OK
+
+Observação:
+- Alembic/Postgres não fazem parte do Block 2; continuam previstos para Block 5.
+
+### Block 3 — Lineage & Audit
+
+Concluído em `2026-06-17`.
+
+Commits:
+- `7c09703 feat(model): add lineage inputs and structured run logs`
+- `4f3eaaa feat(api): expose model run inputs and logs`
+- `55e01b6 feat(executions): show real trust center inputs and logs`
+
+Entregas:
+- Tabelas persistidas `model_run_inputs` e `model_run_logs`.
+- Helper `canonical_hash` para hash SHA-256 canônico de DataFrames.
+- Captura de lineage em `extraction_service`.
+- Logs estruturados para `extraction`, `markov`, `shapley`, `roas`, `recommendation` e `persistence`.
+- Falhas de step gravam log `failed` antes de propagar exception.
+- Endpoints `GET /model-runs/{id}/inputs` e `GET /model-runs/{id}/logs`.
+- `data_quality_checks` expandido com `score`, `affected_rows` e `recommendation`.
+- Trust Center e painel de detalhes em `/execucoes-e-qualidade` consumindo `summary`, `inputs`, `logs` e `data-quality`.
+
+Validação executada:
+- Backend: `.venv/bin/pytest -q` → `122 passed`
+- Frontend: `npm test -- --run` → `161 passed`
+- Frontend build: `npm run build` → OK
 
 ## Decisões já tomadas (registradas para não rediscutir)
 
