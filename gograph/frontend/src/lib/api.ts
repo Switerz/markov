@@ -314,15 +314,24 @@ export type Scenario = {
   model_run_id: number;
   name: string;
   description: string | null;
+  action_type: ScenarioActionType;
+  channel: string | null;
+  intensity_pct: number | null;
+  period_start: string | null;
+  period_end: string | null;
   nodes: Record<string, unknown>[];
   edges: Record<string, unknown>[];
   path_channels: string[];
   created_at: string | null;
   updated_at: string | null;
+  analysis: ScenarioAnalysis | null;
 };
 
 export type ScenarioAnalysis = {
   scenario_id: number;
+  model_run_id: number | null;
+  code_version: string | null;
+  analyzed_at: string | null;
   path_channels: string[];
   path_probability: number | null;
   conversion_probability_given_last_node: number | null;
@@ -342,10 +351,22 @@ export type ScenarioAnalysis = {
   confidence_score: number | null;
 };
 
+export type ScenarioActionType =
+  | "removeChannel"
+  | "reducePresence"
+  | "redistributeBudget"
+  | "compareModels"
+  | "path";
+
 export type ScenarioCreatePayload = {
   model_run_id: number;
   name: string;
   description?: string | null;
+  action_type: ScenarioActionType;
+  channel?: string | null;
+  intensity_pct?: number | null;
+  period_start?: string | null;
+  period_end?: string | null;
   nodes: Record<string, unknown>[];
   edges: Record<string, unknown>[];
   path_channels: string[];
@@ -354,6 +375,11 @@ export type ScenarioCreatePayload = {
 export type ScenarioUpdatePayload = {
   name?: string;
   description?: string | null;
+  action_type?: ScenarioActionType;
+  channel?: string | null;
+  intensity_pct?: number | null;
+  period_start?: string | null;
+  period_end?: string | null;
   nodes?: Record<string, unknown>[];
   edges?: Record<string, unknown>[];
   path_channels?: string[];
@@ -607,31 +633,35 @@ export const api = {
 
   // Sandbox
   listScenarios: (modelRunId: number) =>
-    request<Scenario[]>(`/sandbox/scenarios?model_run_id=${modelRunId}`),
-  getScenario: (id: number) => request<Scenario>(`/sandbox/scenarios/${id}`),
+    request<Scenario[]>(`/model-runs/${modelRunId}/scenarios`),
+  getScenario: (id: number) => request<Scenario>(`/scenarios/${id}`),
   createScenario: (payload: ScenarioCreatePayload) =>
-    request<Scenario>("/sandbox/scenarios", {
+    request<Scenario>(`/model-runs/${payload.model_run_id}/scenarios`, {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, model_run_id: undefined }),
     }),
   updateScenario: (id: number, payload: ScenarioUpdatePayload) =>
-    request<Scenario>(`/sandbox/scenarios/${id}`, {
+    request<Scenario>(`/scenarios/${id}`, {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
   deleteScenario: (id: number) =>
-    fetch(`${API_BASE}/sandbox/scenarios/${id}`, { method: "DELETE" }).then(
-      () => undefined,
-    ),
+    fetch(`${API_BASE}/scenarios/${id}`, { method: "DELETE" }).then((response) => {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return undefined;
+    }),
   analyzeScenario: (id: number) =>
-    request<ScenarioAnalysis>(`/sandbox/scenarios/${id}/analyze`, {
+    request<ScenarioAnalysis>(`/scenarios/${id}/analyze`, {
       method: "POST",
     }),
   compareScenarios: (payload: ScenarioComparePayload) =>
-    request<ScenarioCompareResponse>("/sandbox/compare", {
+    request<ScenarioCompareResponse>(
+      `/model-runs/${payload.model_run_id}/scenarios/compare`,
+      {
       method: "POST",
-      body: JSON.stringify(payload),
-    }),
+      body: JSON.stringify({ ...payload, model_run_id: undefined }),
+      },
+    ),
 };
 
 // ---------------------------------------------------------------------------

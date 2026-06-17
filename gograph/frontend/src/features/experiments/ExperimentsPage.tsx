@@ -9,8 +9,18 @@ import { BaselineScenarioComparison } from "./components/BaselineScenarioCompari
 import { AttributionRedistributionWaterfall } from "./components/AttributionRedistributionWaterfall";
 import { ScenarioInsightsPanel } from "./components/ScenarioInsightsPanel";
 import { ScenarioComparisonTable } from "./components/ScenarioComparisonTable";
+import { SavedScenariosList } from "./components/SavedScenariosList";
 import { useExperimentsData } from "./hooks/useExperimentsData";
-import { downloadCsv, todayIso } from "../../shared/format";
+import {
+  useAnalyzeScenario,
+  useCreateScenario,
+  useDeleteScenario,
+  useScenarios,
+} from "./hooks/useScenarios";
+import { useActiveRun } from "../../app/hooks/useActiveRun";
+import { downloadCsv, formatCompactBRL, formatPercent, todayIso } from "../../shared/format";
+import type { ModelRun, Scenario } from "../../lib/api";
+import type { ScenarioComparisonTable as ScenarioComparisonTableData } from "./types";
 import styles from "./ExperimentsPage.module.css";
 
 export type AppliedScenario = {
@@ -20,14 +30,26 @@ export type AppliedScenario = {
 
 export function ExperimentsPage() {
   const data = useExperimentsData();
+  const activeRun = useActiveRun();
+  const runId = activeRun?.id;
+  const scenariosQuery = useScenarios(runId);
+  const createScenario = useCreateScenario(runId);
+  const analyzeScenario = useAnalyzeScenario(runId);
+  const deleteScenario = useDeleteScenario(runId);
   const toast = useToast();
   const [newRunOpen, setNewRunOpen] = useState(false);
   const [scenarioFlash, setScenarioFlash] = useState(false);
   const [appliedScenario, setAppliedScenario] =
     useState<AppliedScenario | null>(null);
+  const [busyScenarioId, setBusyScenarioId] = useState<number | null>(null);
+  const savedScenarios = scenariosQuery.data ?? [];
+  const scenarioComparisonTable =
+    activeRun != null
+      ? buildScenarioComparisonTable(data.scenarioComparisonTable, savedScenarios, activeRun)
+      : data.scenarioComparisonTable;
 
   function exportPanel() {
-    const rows = data.scenarioComparisonTable.rows.map((r) => ({
+    const rows = scenarioComparisonTable.rows.map((r) => ({
       scenario: r.scenario,
       description: r.description,
       conversion_probability: r.conversionProbability,
@@ -45,6 +67,70 @@ export function ExperimentsPage() {
     toast.push("Exportação iniciada", "green");
   }
 
+  async function applyScenario(values: {
+    channel: string;
+    action: string;
+    intensity: number;
+    period: string;
+    actionType: Scenario["action_type"];
+  }) {
+    if (runId == null) {
+      toast.push("Nenhuma execução ativa para salvar o cenário", "red");
+      return;
+    }
+
+    const name = `${actionTypeLabel(values.actionType)} ${values.channel}`;
+    try {
+      const saved = await createScenario.mutateAsync({
+        name,
+        description: `${values.action} · ${values.period || "período atual"}`,
+        action_type: values.actionType,
+        channel: values.channel,
+        intensity_pct: values.intensity,
+        nodes: [],
+        edges: [],
+        path_channels: [values.channel],
+      });
+      setBusyScenarioId(saved.id);
+      const analysis = await analyzeScenario.mutateAsync(saved.id);
+      setAppliedScenario({ name, intensityPct: values.intensity });
+      toast.push(
+        `Cenário analisado — versão ${analysis.code_version ?? "-"}`,
+        "green",
+      );
+      setScenarioFlash(true);
+      window.setTimeout(() => setScenarioFlash(false), 1500);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "erro desconhecido";
+      toast.push(`Falha ao salvar cenário: ${msg}`, "red");
+    } finally {
+      setBusyScenarioId(null);
+    }
+  }
+
+  async function reanalyzeSavedScenario(scenarioId: number) {
+    setBusyScenarioId(scenarioId);
+    try {
+      const analysis = await analyzeScenario.mutateAsync(scenarioId);
+      toast.push(`Análise atualizada — versão ${analysis.code_version ?? "-"}`, "green");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "erro desconhecido";
+      toast.push(`Falha ao reanalisar: ${msg}`, "red");
+    } finally {
+      setBusyScenarioId(null);
+    }
+  }
+
+  async function removeSavedScenario(scenarioId: number) {
+    try {
+      await deleteScenario.mutateAsync(scenarioId);
+      toast.push("Cenário excluído", "green");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "erro desconhecido";
+      toast.push(`Falha ao excluir: ${msg}`, "red");
+    }
+  }
+
   return (
     <>
       <TopBar
@@ -55,8 +141,8 @@ export function ExperimentsPage() {
             <span className={styles.execContext}>
               <Calendar size={14} aria-hidden />
               <span>
-                {data.topBar.executionContext.label}:{" "}
-                <strong>{data.topBar.executionContext.value}</strong>
+                {activeRun ? "Execução" : data.topBar.executionContext.label}:{" "}
+                <strong>{activeRun ? `#${activeRun.id}` : data.topBar.executionContext.value}</strong>
               </span>
             </span>
             <Button
@@ -71,7 +157,7 @@ export function ExperimentsPage() {
               iconLeft={<Save size={16} />}
               onClick={() =>
                 toast.push(
-                  "Experimento salvo (persistência API em breve)",
+                  "Cenários são salvos automaticamente",
                   "green",
                 )
               }
@@ -108,22 +194,8 @@ export function ExperimentsPage() {
           <section className={styles.left}>
             <ScenarioBuilderForm
               builder={data.scenarioBuilder}
-              onApply={(values) => {
-                // Local-only application: lift values into page state so the
-                // comparison and waterfall components can react visually. The
-                // API contract (api.createScenario + api.analyzeScenario)
-                // remains a future hookup point.
-                setAppliedScenario({
-                  name: `${values.action} ${values.channel}`,
-                  intensityPct: values.intensity,
-                });
-                toast.push(
-                  `Cenário aplicado — ${values.action} ${values.channel} (${values.intensity}%)`,
-                  "green",
-                );
-                setScenarioFlash(true);
-                window.setTimeout(() => setScenarioFlash(false), 1500);
-              }}
+              onApply={applyScenario}
+              loading={createScenario.isPending || analyzeScenario.isPending}
             />
             <div
               className={
@@ -141,9 +213,16 @@ export function ExperimentsPage() {
               redistribution={data.redistributionChart}
               intensityPct={appliedScenario?.intensityPct}
             />
-            <ScenarioComparisonTable table={data.scenarioComparisonTable} />
+            <ScenarioComparisonTable table={scenarioComparisonTable} />
           </section>
           <aside className={styles.right}>
+            <SavedScenariosList
+              scenarios={savedScenarios}
+              loading={scenariosQuery.isLoading}
+              busyScenarioId={busyScenarioId}
+              onAnalyze={reanalyzeSavedScenario}
+              onDelete={removeSavedScenario}
+            />
             <ScenarioInsightsPanel
               insights={data.scenarioInsights}
               onAction={(label) => toast.push(`${label} — em breve`, "blue")}
@@ -153,4 +232,94 @@ export function ExperimentsPage() {
       </div>
     </>
   );
+}
+
+function buildScenarioComparisonTable(
+  base: ScenarioComparisonTableData,
+  scenarios: Scenario[],
+  run: ModelRun,
+): ScenarioComparisonTableData {
+  const baselineConv = run.model_conversion_rate ?? run.observed_conversion_rate ?? null;
+  const baselineRevenue = run.total_revenue ?? 0;
+  const baselineSpend = run.total_spend ?? 0;
+  const baselineRoas = baselineSpend > 0 ? baselineRevenue / baselineSpend : null;
+
+  return {
+    ...base,
+    title: "Comparativo de cenários persistidos",
+    rows: [
+      {
+        scenario: "Baseline (atual)",
+        description: `Execução #${run.id}`,
+        conversionProbability:
+          baselineConv != null ? formatPercent(baselineConv, 2) : "-",
+        revenue: formatCompactBRL(baselineRevenue),
+        investment: baselineSpend > 0 ? formatCompactBRL(baselineSpend) : "-",
+        roas: baselineRoas != null ? `${baselineRoas.toFixed(2).replace(".", ",")}x` : "-",
+        impact: "Referência",
+        tone: "neutral",
+      },
+      ...scenarios.map((scenario) => scenarioToTableRow(scenario, run)),
+    ],
+  };
+}
+
+function scenarioToTableRow(scenario: Scenario, run: ModelRun) {
+  const analysis = scenario.analysis;
+  const baselineConv = run.model_conversion_rate ?? run.observed_conversion_rate ?? null;
+  const scenarioConv = analysis?.composite_conversion_probability ?? null;
+  const scenarioRevenue = analysis?.expected_revenue ?? null;
+  const estimatedSpend =
+    scenario.intensity_pct != null && run.total_spend
+      ? run.total_spend * (scenario.intensity_pct / 100)
+      : null;
+  const roas =
+    scenarioRevenue != null && estimatedSpend != null && estimatedSpend > 0
+      ? scenarioRevenue / estimatedSpend
+      : null;
+
+  return {
+    scenario: scenario.name,
+    description: scenario.description ?? actionTypeLabel(scenario.action_type),
+    conversionProbability:
+      scenarioConv != null ? formatPercent(scenarioConv, 2) : "Pendente",
+    conversionDelta:
+      scenarioConv != null && baselineConv != null
+        ? formatSignedPercentPoints(scenarioConv - baselineConv)
+        : undefined,
+    revenue: scenarioRevenue != null ? formatCompactBRL(scenarioRevenue) : "-",
+    revenueDelta:
+      scenarioRevenue != null
+        ? formatSignedCurrency(scenarioRevenue - (run.total_revenue ?? 0))
+        : undefined,
+    investment: estimatedSpend != null ? formatCompactBRL(estimatedSpend) : "-",
+    roas: roas != null ? `${roas.toFixed(2).replace(".", ",")}x` : "-",
+    impact:
+      analysis?.confidence_score != null
+        ? `Confiança ${formatPercent(analysis.confidence_score, 0)}`
+        : "Aguardando análise",
+    tone: analysis ? "green" : "orange",
+  } as const;
+}
+
+function actionTypeLabel(actionType: Scenario["action_type"]) {
+  const labels: Record<Scenario["action_type"], string> = {
+    removeChannel: "Remover",
+    reducePresence: "Reduzir presença",
+    redistributeBudget: "Redistribuir budget",
+    compareModels: "Comparar modelos",
+    path: "Simular caminho",
+  };
+  return labels[actionType] ?? actionType;
+}
+
+function formatSignedPercentPoints(value: number) {
+  const pp = value * 100;
+  const sign = pp >= 0 ? "+" : "";
+  return `${sign}${pp.toFixed(2).replace(".", ",")} p.p.`;
+}
+
+function formatSignedCurrency(value: number) {
+  const sign = value >= 0 ? "+" : "-";
+  return `${sign}${formatCompactBRL(Math.abs(value))}`;
 }

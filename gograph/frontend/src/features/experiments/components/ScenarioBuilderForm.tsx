@@ -31,7 +31,8 @@ export type ScenarioBuilderFormValues = {
 
 export type ScenarioBuilderFormProps = {
   builder: ScenarioBuilder;
-  onApply: (values: ScenarioBuilderFormValues) => void;
+  onApply: (values: ScenarioBuilderFormValues) => void | Promise<void>;
+  loading?: boolean;
 };
 
 const actionTypeIcons: Record<ScenarioActionType["id"], LucideIcon> = {
@@ -78,6 +79,7 @@ function findField<T extends ScenarioField["id"]>(
 export function ScenarioBuilderForm({
   builder,
   onApply,
+  loading,
 }: ScenarioBuilderFormProps) {
   const channelField = findField(builder.fields, "channel");
   const actionField = findField(builder.fields, "action");
@@ -107,14 +109,14 @@ export function ScenarioBuilderForm({
   const {
     control,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isSubmitting },
   } = useForm<SchemaValues>({
     resolver: zodResolver(schema),
     defaultValues: defaults,
   });
 
-  const onSubmit = handleSubmit((values) => {
-    onApply({ ...values, actionType: activeActionType });
+  const onSubmit = handleSubmit(async (values) => {
+    await onApply({ ...values, actionType: activeActionType });
   });
 
   return (
@@ -274,8 +276,9 @@ export function ScenarioBuilderForm({
               type="submit"
               variant="primary"
               iconLeft={primaryIcon ?? <Play size={14} />}
+              loading={loading || isSubmitting}
             >
-              {builder.primaryAction.label}
+              {loading || isSubmitting ? "Aplicando…" : builder.primaryAction.label}
             </Button>
           </div>
         </form>

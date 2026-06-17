@@ -40,6 +40,15 @@ def _apply_migrations(engine) -> None:
     _add_column_if_missing(engine, "data_quality_checks", "score", "FLOAT")
     _add_column_if_missing(engine, "data_quality_checks", "affected_rows", "INTEGER")
     _add_column_if_missing(engine, "data_quality_checks", "recommendation", "TEXT")
+    _add_column_if_missing(engine, "scenarios", "action_type", "TEXT DEFAULT 'path'")
+    _add_column_if_missing(engine, "scenarios", "channel", "TEXT")
+    _add_column_if_missing(engine, "scenarios", "intensity_pct", "FLOAT")
+    _add_column_if_missing(engine, "scenarios", "period_start", "DATE")
+    _add_column_if_missing(engine, "scenarios", "period_end", "DATE")
+    _backfill_scenario_graph(engine)
+    _drop_column_if_present(engine, "scenarios", "nodes_json")
+    _drop_column_if_present(engine, "scenarios", "edges_json")
+    _drop_column_if_present(engine, "scenarios", "path_channels_json")
 
 
 def _add_column_if_missing(engine, table: str, column: str, col_type: str) -> None:
@@ -55,3 +64,48 @@ def _add_column_if_missing(engine, table: str, column: str, col_type: str) -> No
                 )
             )
             conn.commit()
+
+
+def _drop_column_if_present(engine, table: str, column: str) -> None:
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        existing = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))}
+        if column not in existing:
+            return
+        conn.execute(text(f"ALTER TABLE {table} DROP COLUMN {column}"))
+        conn.commit()
+
+
+def _backfill_scenario_graph(engine) -> None:
+    """Move old inline graph JSON columns into scenario_graph when present."""
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        scenario_cols = {
+            row[1]
+            for row in conn.execute(text("PRAGMA table_info(scenarios)"))
+        }
+        graph_cols = {
+            row[1]
+            for row in conn.execute(text("PRAGMA table_info(scenario_graph)"))
+        }
+        required_old = {"id", "nodes_json", "edges_json", "path_channels_json"}
+        required_graph = {"scenario_id", "nodes_json", "edges_json", "path_channels_json"}
+        if not required_old.issubset(scenario_cols) or not required_graph.issubset(graph_cols):
+            return
+
+        conn.execute(
+            text(
+                """
+                INSERT INTO scenario_graph (
+                    scenario_id, nodes_json, edges_json, path_channels_json
+                )
+                SELECT s.id, s.nodes_json, s.edges_json, s.path_channels_json
+                FROM scenarios s
+                LEFT JOIN scenario_graph g ON g.scenario_id = s.id
+                WHERE g.scenario_id IS NULL
+                """
+            )
+        )
+        conn.commit()

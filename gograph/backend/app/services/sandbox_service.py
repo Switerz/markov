@@ -10,10 +10,16 @@ import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from gograph.backend.app.db.models import Scenario
+from gograph.backend.app.db.models import (
+    ModelRun,
+    Scenario,
+    ScenarioAnalysis,
+    ScenarioGraph,
+    utcnow,
+)
+from gograph.backend.app.services.code_version_service import get_code_version
 from gograph.backend.app.services.persistence_service import (
     get_model_run_table,
-    session_scope,
 )
 
 
@@ -29,17 +35,34 @@ def create_scenario(
     edges: list[dict],
     path_channels: list[str],
     session: Session,
+    action_type: str = "path",
+    channel: Optional[str] = None,
+    intensity_pct: Optional[float] = None,
+    period_start: Any = None,
+    period_end: Any = None,
 ) -> dict[str, Any]:
+    _validate_action_payload(action_type, channel, intensity_pct)
     scenario = Scenario(
         model_run_id=model_run_id,
         name=name,
         description=description,
+        action_type=action_type,
+        channel=channel,
+        intensity_pct=intensity_pct,
+        period_start=period_start,
+        period_end=period_end,
+    )
+    session.add(scenario)
+    session.flush()
+    graph = ScenarioGraph(
+        scenario_id=scenario.id,
         nodes_json=json.dumps(nodes),
         edges_json=json.dumps(edges),
         path_channels_json=json.dumps(path_channels),
     )
-    session.add(scenario)
+    session.add(graph)
     session.flush()
+    scenario.graph = graph
     return _scenario_to_dict(scenario)
 
 
@@ -69,20 +92,40 @@ def update_scenario(
     edges: Optional[list[dict]],
     path_channels: Optional[list[str]],
     session: Session,
+    action_type: Optional[str] = None,
+    channel: Optional[str] = None,
+    intensity_pct: Optional[float] = None,
+    period_start: Any = None,
+    period_end: Any = None,
 ) -> Optional[dict[str, Any]]:
     row = session.get(Scenario, scenario_id)
     if row is None:
         return None
+    graph = _ensure_graph(row, session)
+    next_action_type = action_type or row.action_type
+    next_channel = channel if channel is not None else row.channel
+    next_intensity_pct = intensity_pct if intensity_pct is not None else row.intensity_pct
+    _validate_action_payload(next_action_type, next_channel, next_intensity_pct)
     if name is not None:
         row.name = name
     if description is not None:
         row.description = description
+    if action_type is not None:
+        row.action_type = action_type
+    if channel is not None:
+        row.channel = channel
+    if intensity_pct is not None:
+        row.intensity_pct = intensity_pct
+    if period_start is not None:
+        row.period_start = period_start
+    if period_end is not None:
+        row.period_end = period_end
     if nodes is not None:
-        row.nodes_json = json.dumps(nodes)
+        graph.nodes_json = json.dumps(nodes)
     if edges is not None:
-        row.edges_json = json.dumps(edges)
+        graph.edges_json = json.dumps(edges)
     if path_channels is not None:
-        row.path_channels_json = json.dumps(path_channels)
+        graph.path_channels_json = json.dumps(path_channels)
     session.flush()
     return _scenario_to_dict(row)
 
@@ -105,13 +148,12 @@ def analyze_scenario(scenario_id: int, session: Session) -> dict[str, Any]:
     Compute path metrics for a saved scenario using the attached model run's
     transition matrix, attribution results and path summary.
     """
-    from gograph.backend.app.db.models import ModelRun
-
     row = session.get(Scenario, scenario_id)
     if row is None:
         raise ValueError(f"Scenario {scenario_id} not found.")
 
-    path_channels: list[str] = json.loads(row.path_channels_json)
+    graph = _ensure_graph(row, session)
+    path_channels: list[str] = _json_str_list(graph.path_channels_json)
     model_run_id: int = row.model_run_id
 
     matrix_df      = get_model_run_table(model_run_id, "transition_matrix", session=session)
@@ -127,6 +169,12 @@ def analyze_scenario(scenario_id: int, session: Session) -> dict[str, Any]:
         baseline_conv_rate, model_total_rev,
     )
     result["scenario_id"] = scenario_id
+    result["model_run_id"] = model_run_id
+    result["code_version"] = get_code_version()
+    result["analyzed_at"] = utcnow()
+    _upsert_analysis(row, result, session)
+    session.flush()
+    result["analyzed_at"] = result["analyzed_at"].isoformat()
     return result
 
 
@@ -140,9 +188,10 @@ def compare_scenarios(
     include_baseline: bool,
     include_top_path: bool,
     session: Session,
+    baseline_run_id: Optional[int] = None,
+    compare_run_id: Optional[int] = None,
 ) -> dict[str, Any]:
-    """Compare multiple scenarios (and optionally baseline / top real path)."""
-    from gograph.backend.app.db.models import ModelRun
+    """Compare persisted scenario analyses and optional baseline / top real path."""
 
     if not scenario_ids and not include_baseline and not include_top_path:
         raise ValueError("Forneça pelo menos um cenário ou ative baseline/top_path.")
@@ -151,12 +200,17 @@ def compare_scenarios(
     if model_run is None:
         raise ValueError(f"ModelRun {model_run_id} não encontrado.")
 
-    baseline_conv_rate = float(model_run.observed_conversion_rate or 0.0)
-    model_total_rev    = float(model_run.total_revenue or 0.0)
+    metrics_run_id = compare_run_id or baseline_run_id or model_run_id
+    metrics_run = session.get(ModelRun, metrics_run_id)
+    if metrics_run is None:
+        raise ValueError(f"ModelRun {metrics_run_id} não encontrado.")
 
-    matrix_df      = get_model_run_table(model_run_id, "transition_matrix", session=session)
-    paths_df       = get_model_run_table(model_run_id, "path_summary",      session=session)
-    transitions_df = get_model_run_table(model_run_id, "transition_counts", session=session)
+    baseline_conv_rate = float(metrics_run.observed_conversion_rate or 0.0)
+    model_total_rev    = float(metrics_run.total_revenue or 0.0)
+
+    matrix_df      = get_model_run_table(metrics_run_id, "transition_matrix", session=session)
+    paths_df       = get_model_run_table(metrics_run_id, "path_summary",      session=session)
+    transitions_df = get_model_run_table(metrics_run_id, "transition_counts", session=session)
 
     items: list[dict] = []
 
@@ -168,17 +222,11 @@ def compare_scenarios(
             raise ValueError(
                 f"Cenário {sid} pertence ao model run {row.model_run_id}, não {model_run_id}."
             )
-        path_channels = json.loads(row.path_channels_json)
-        metrics = _analyze_path_channels(
-            path_channels, matrix_df, paths_df, transitions_df,
-            baseline_conv_rate, model_total_rev,
-        )
-        items.append({
-            "source": "scenario",
-            "scenario_id": sid,
-            "name": row.name,
-            **{k: metrics[k] for k in _COMPARE_KEYS},
-        })
+        if row.analysis is None:
+            graph = _ensure_graph(row, session)
+            items.append(_missing_analysis_item(row, _json_str_list(graph.path_channels_json)))
+        else:
+            items.append(_analysis_compare_item(row))
 
     if include_baseline:
         items.append(_get_baseline_item(matrix_df, paths_df, transitions_df, baseline_conv_rate, model_total_rev))
@@ -392,6 +440,99 @@ def _compute_delta(a: dict, b: dict) -> dict[str, Any]:
     }
 
 
+def _validate_action_payload(
+    action_type: str,
+    channel: Optional[str],
+    intensity_pct: Optional[float],
+) -> None:
+    allowed = {"removeChannel", "reducePresence", "redistributeBudget", "compareModels", "path"}
+    if action_type not in allowed:
+        raise ValueError(f"Tipo de cenário inválido: {action_type}.")
+    if action_type == "removeChannel" and not channel:
+        raise ValueError("channel é obrigatório para removeChannel.")
+    if action_type == "reducePresence" and (not channel or intensity_pct is None):
+        raise ValueError("channel e intensity_pct são obrigatórios para reducePresence.")
+
+
+def _ensure_graph(row: Scenario, session: Session) -> ScenarioGraph:
+    graph = row.graph
+    if graph is None:
+        graph = ScenarioGraph(
+            scenario_id=row.id,
+            nodes_json="[]",
+            edges_json="[]",
+            path_channels_json="[]",
+        )
+        session.add(graph)
+        session.flush()
+        row.graph = graph
+    return graph
+
+
+def _upsert_analysis(row: Scenario, result: dict[str, Any], session: Session) -> None:
+    analysis = row.analysis
+    if analysis is None:
+        analysis = ScenarioAnalysis(scenario_id=row.id)
+        session.add(analysis)
+        row.analysis = analysis
+
+    analysis.model_run_id = row.model_run_id
+    analysis.code_version = str(result["code_version"])
+    analysis.analyzed_at = result["analyzed_at"]
+    analysis.path_probability = result["path_probability"]
+    analysis.conversion_probability_given_last_node = result[
+        "conversion_probability_given_last_node"
+    ]
+    analysis.composite_conversion_probability = result["composite_conversion_probability"]
+    analysis.historical_conversion_rate = result["historical_conversion_rate"]
+    analysis.lift = result["lift"]
+    analysis.expected_revenue = result["expected_revenue"]
+    analysis.expected_ticket = result["expected_ticket"]
+    analysis.historical_support = int(result["historical_support"] or 0)
+    analysis.confidence_score = result["confidence_score"]
+    analysis.warnings_json = json.dumps(result["warnings"])
+    analysis.similar_paths_json = json.dumps(result["similar_paths"])
+
+
+def _analysis_compare_item(row: Scenario) -> dict[str, Any]:
+    analysis = row.analysis
+    graph = row.graph
+    assert analysis is not None
+    return {
+        "source": "scenario",
+        "scenario_id": row.id,
+        "name": row.name,
+        "path_channels": _json_str_list(graph.path_channels_json if graph else "[]"),
+        "path_probability": analysis.path_probability,
+        "composite_conversion_probability": analysis.composite_conversion_probability,
+        "historical_conversion_rate": analysis.historical_conversion_rate,
+        "lift": analysis.lift,
+        "expected_revenue": analysis.expected_revenue,
+        "expected_ticket": analysis.expected_ticket,
+        "historical_support": analysis.historical_support,
+        "confidence_score": analysis.confidence_score,
+        "warnings": _json_str_list(analysis.warnings_json),
+    }
+
+
+def _missing_analysis_item(row: Scenario, path_channels: list[str]) -> dict[str, Any]:
+    return {
+        "source": "scenario",
+        "scenario_id": row.id,
+        "name": row.name,
+        "path_channels": path_channels,
+        "path_probability": None,
+        "composite_conversion_probability": None,
+        "historical_conversion_rate": None,
+        "lift": None,
+        "expected_revenue": None,
+        "expected_ticket": None,
+        "historical_support": 0,
+        "confidence_score": None,
+        "warnings": ["Cenário ainda não analisado."],
+    }
+
+
 def _path_probability(channels: list[str], matrix: pd.DataFrame) -> float:
     """P((start)→ch1→...→chN→Conversion) — full chain."""
     if matrix.empty:
@@ -588,6 +729,18 @@ def _clean(v: Any) -> Any:
     return v
 
 
+def _json_list(raw: str | None) -> list:
+    try:
+        value = json.loads(raw or "[]")
+    except json.JSONDecodeError:
+        return []
+    return value if isinstance(value, list) else []
+
+
+def _json_str_list(raw: str | None) -> list[str]:
+    return [str(item) for item in _json_list(raw)]
+
+
 def _empty_result(warnings: list[str]) -> dict[str, Any]:
     return {
         "path_channels": [],
@@ -606,14 +759,45 @@ def _empty_result(warnings: list[str]) -> dict[str, Any]:
 
 
 def _scenario_to_dict(row: Scenario) -> dict[str, Any]:
+    graph = row.graph
     return {
         "id": row.id,
         "model_run_id": row.model_run_id,
         "name": row.name,
         "description": row.description,
-        "nodes": json.loads(row.nodes_json),
-        "edges": json.loads(row.edges_json),
-        "path_channels": json.loads(row.path_channels_json),
+        "action_type": row.action_type,
+        "channel": row.channel,
+        "intensity_pct": row.intensity_pct,
+        "period_start": row.period_start.isoformat() if row.period_start else None,
+        "period_end": row.period_end.isoformat() if row.period_end else None,
+        "nodes": _json_list(graph.nodes_json) if graph else [],
+        "edges": _json_list(graph.edges_json) if graph else [],
+        "path_channels": _json_str_list(graph.path_channels_json) if graph else [],
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+        "analysis": _analysis_to_dict(row.analysis, graph) if row.analysis else None,
+    }
+
+
+def _analysis_to_dict(
+    row: ScenarioAnalysis,
+    graph: ScenarioGraph | None = None,
+) -> dict[str, Any]:
+    return {
+        "scenario_id": row.scenario_id,
+        "model_run_id": row.model_run_id,
+        "code_version": row.code_version,
+        "analyzed_at": row.analyzed_at.isoformat() if row.analyzed_at else None,
+        "path_channels": _json_str_list(graph.path_channels_json if graph else "[]"),
+        "path_probability": row.path_probability,
+        "conversion_probability_given_last_node": row.conversion_probability_given_last_node,
+        "composite_conversion_probability": row.composite_conversion_probability,
+        "historical_conversion_rate": row.historical_conversion_rate,
+        "lift": row.lift,
+        "expected_revenue": row.expected_revenue,
+        "expected_ticket": row.expected_ticket,
+        "historical_support": row.historical_support,
+        "similar_paths": _json_list(row.similar_paths_json),
+        "warnings": _json_str_list(row.warnings_json),
+        "confidence_score": row.confidence_score,
     }

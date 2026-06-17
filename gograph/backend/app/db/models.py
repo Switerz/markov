@@ -1,8 +1,8 @@
 """SQLAlchemy models for persisted GoGraph model runs."""
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from gograph.backend.app.db.base import Base
@@ -304,16 +304,70 @@ class Scenario(Base):
     __tablename__ = "scenarios"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    model_run_id: Mapped[int] = mapped_column(ForeignKey("model_runs.id"), index=True)
+    model_run_id: Mapped[int] = mapped_column(
+        ForeignKey("model_runs.id", ondelete="CASCADE"),
+        index=True,
+    )
     name: Mapped[str] = mapped_column(String(255))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    nodes_json: Mapped[str] = mapped_column(Text, default="[]")
-    edges_json: Mapped[str] = mapped_column(Text, default="[]")
-    path_channels_json: Mapped[str] = mapped_column(Text, default="[]")
+    action_type: Mapped[str] = mapped_column(String(32), default="path", index=True)
+    channel: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    intensity_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    period_end: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     model_run: Mapped[ModelRun] = relationship(back_populates="scenarios")
+    graph: Mapped["ScenarioGraph | None"] = relationship(
+        back_populates="scenario",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    analysis: Mapped["ScenarioAnalysis | None"] = relationship(
+        back_populates="scenario",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+
+
+class ScenarioGraph(Base):
+    __tablename__ = "scenario_graph"
+
+    scenario_id: Mapped[int] = mapped_column(
+        ForeignKey("scenarios.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    nodes_json: Mapped[str] = mapped_column(Text, default="[]")
+    edges_json: Mapped[str] = mapped_column(Text, default="[]")
+    path_channels_json: Mapped[str] = mapped_column(Text, default="[]")
+
+    scenario: Mapped["Scenario"] = relationship(back_populates="graph")
+
+
+class ScenarioAnalysis(Base):
+    __tablename__ = "scenario_analysis"
+
+    scenario_id: Mapped[int] = mapped_column(
+        ForeignKey("scenarios.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    model_run_id: Mapped[int] = mapped_column(Integer, index=True)
+    code_version: Mapped[str] = mapped_column(String(64))
+    analyzed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    path_probability: Mapped[float | None] = mapped_column(Float, nullable=True)
+    conversion_probability_given_last_node: Mapped[float | None] = mapped_column(Float, nullable=True)
+    composite_conversion_probability: Mapped[float | None] = mapped_column(Float, nullable=True)
+    historical_conversion_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lift: Mapped[float | None] = mapped_column(Float, nullable=True)
+    expected_revenue: Mapped[float | None] = mapped_column(Float, nullable=True)
+    expected_ticket: Mapped[float | None] = mapped_column(Float, nullable=True)
+    historical_support: Mapped[int] = mapped_column(Integer, default=0)
+    confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    warnings_json: Mapped[str] = mapped_column(Text, default="[]")
+    similar_paths_json: Mapped[str] = mapped_column(Text, default="[]")
+
+    scenario: Mapped["Scenario"] = relationship(back_populates="analysis")
 
 
 ModelRun.scenarios = relationship(

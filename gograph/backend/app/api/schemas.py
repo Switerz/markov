@@ -1,8 +1,9 @@
 """Pydantic request/response schemas for the GoGraph API."""
 
-from typing import Any, Dict, Generic, Optional, TypeVar
+from datetime import date
+from typing import Any, Dict, Generic, Literal, Optional, TypeVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 RowT = TypeVar("RowT", bound=BaseModel)
 
@@ -67,18 +68,50 @@ class SandboxEdge(BaseModel):
     target: str
 
 
+ScenarioActionType = Literal[
+    "removeChannel",
+    "reducePresence",
+    "redistributeBudget",
+    "compareModels",
+    "path",
+]
+
+
 class ScenarioCreateRequest(BaseModel):
-    model_run_id: int
+    model_run_id: Optional[int] = None
     name: str
     description: Optional[str] = None
+    action_type: ScenarioActionType = "path"
+    channel: Optional[str] = None
+    intensity_pct: Optional[float] = Field(default=None, ge=0, le=100)
+    period_start: Optional[date] = None
+    period_end: Optional[date] = None
     nodes: list[SandboxNode] = Field(default_factory=list)
     edges: list[SandboxEdge] = Field(default_factory=list)
     path_channels: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_action_payload(self):
+        if self.action_type == "removeChannel" and not self.channel:
+            raise ValueError("channel is required for removeChannel scenarios.")
+        if self.action_type == "reducePresence":
+            if not self.channel:
+                raise ValueError("channel is required for reducePresence scenarios.")
+            if self.intensity_pct is None:
+                raise ValueError("intensity_pct is required for reducePresence scenarios.")
+        if self.action_type == "path" and (not self.nodes or not self.edges):
+            raise ValueError("nodes and edges are required for path scenarios.")
+        return self
 
 
 class ScenarioUpdateRequest(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    action_type: Optional[ScenarioActionType] = None
+    channel: Optional[str] = None
+    intensity_pct: Optional[float] = Field(default=None, ge=0, le=100)
+    period_start: Optional[date] = None
+    period_end: Optional[date] = None
     nodes: Optional[list[SandboxNode]] = None
     edges: Optional[list[SandboxEdge]] = None
     path_channels: Optional[list[str]] = None
@@ -89,15 +122,24 @@ class ScenarioResponse(BaseModel):
     model_run_id: int
     name: str
     description: Optional[str]
+    action_type: str
+    channel: Optional[str] = None
+    intensity_pct: Optional[float] = None
+    period_start: Optional[str] = None
+    period_end: Optional[str] = None
     nodes: list[Dict[str, Any]]
     edges: list[Dict[str, Any]]
     path_channels: list[str]
     created_at: Optional[str]
     updated_at: Optional[str]
+    analysis: Optional["ScenarioAnalysisResponse"] = None
 
 
 class ScenarioAnalysisResponse(BaseModel):
     scenario_id: int
+    model_run_id: Optional[int] = None
+    code_version: Optional[str] = None
+    analyzed_at: Optional[str] = None
     path_channels: list[str]
     path_probability: Optional[float]
     conversion_probability_given_last_node: Optional[float]
@@ -113,10 +155,12 @@ class ScenarioAnalysisResponse(BaseModel):
 
 
 class ScenarioCompareRequest(BaseModel):
-    model_run_id: int
+    model_run_id: Optional[int] = None
     scenario_ids: list[int] = Field(default_factory=list)
     include_baseline: bool = False
     include_top_path: bool = False
+    baseline_run_id: Optional[int] = None
+    compare_run_id: Optional[int] = None
 
 
 class ScenarioCompareItem(BaseModel):

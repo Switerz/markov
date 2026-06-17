@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 _ROW_CONFIG = ConfigDict(from_attributes=True, populate_by_name=True)
@@ -299,6 +299,72 @@ class FunnelValidationRow(BaseModel):
     low_intent_drag_score: Optional[float] = None
     qualified_intent_share: Optional[float] = None
     markov_excl_low_intent: Optional[float] = None
+
+
+class ScenarioGraphData(BaseModel):
+    """Graph payload persisted separately from a scenario row."""
+
+    nodes: list[dict] = []
+    edges: list[dict] = []
+    path_channels: list[str] = []
+
+
+class ScenarioAnalysisRow(BaseModel):
+    """Last persisted analysis for a scenario."""
+
+    model_config = _ROW_CONFIG
+
+    scenario_id: int
+    model_run_id: int
+    code_version: str
+    analyzed_at: Optional[str] = None
+    path_channels: list[str] = []
+    path_probability: Optional[float] = None
+    conversion_probability_given_last_node: Optional[float] = None
+    composite_conversion_probability: Optional[float] = None
+    historical_conversion_rate: Optional[float] = None
+    lift: Optional[float] = None
+    expected_revenue: Optional[float] = None
+    expected_ticket: Optional[float] = None
+    historical_support: int = 0
+    confidence_score: Optional[float] = None
+    warnings: list[str] = []
+    similar_paths: list[dict] = []
+
+    @field_validator("warnings", "similar_paths", mode="before")
+    @classmethod
+    def _load_json_list(cls, value: object) -> list:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            try:
+                loaded = json.loads(value or "[]")
+            except json.JSONDecodeError:
+                return []
+            return loaded if isinstance(loaded, list) else []
+        return value if isinstance(value, list) else []
+
+
+class ScenarioRow(BaseModel):
+    """Typed scenario row including graph data and optional latest analysis."""
+
+    model_config = _ROW_CONFIG
+
+    id: int
+    model_run_id: int
+    name: str
+    description: Optional[str] = None
+    action_type: str
+    channel: Optional[str] = None
+    intensity_pct: Optional[float] = None
+    period_start: Optional[str] = None
+    period_end: Optional[str] = None
+    nodes: list[dict] = []
+    edges: list[dict] = []
+    path_channels: list[str] = []
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    analysis: Optional[ScenarioAnalysisRow] = None
 
 
 class SequentialEffectRow(BaseModel):

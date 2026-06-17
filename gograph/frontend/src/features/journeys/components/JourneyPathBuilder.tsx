@@ -145,6 +145,7 @@ export function JourneyPathBuilder({ builder, runId }: JourneyPathBuilderProps) 
       const saved = await api.createScenario({
         model_run_id: runId,
         name: "Caminho ad-hoc",
+        action_type: "path",
         nodes: nodes.map((n) => ({
           id: n.id,
           label: String(n.data?.label ?? n.id),
