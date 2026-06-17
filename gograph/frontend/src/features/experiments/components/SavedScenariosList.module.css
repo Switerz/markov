@@ -52,6 +52,15 @@
   font-size: var(--gg-text-sm);
 }
 
+.auditMeta {
+  align-items: center;
+  color: var(--gg-text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: var(--gg-text-sm);
+  gap: var(--gg-space-2);
+}
+
 .versionBadge {
   justify-content: flex-start;
   width: fit-content;

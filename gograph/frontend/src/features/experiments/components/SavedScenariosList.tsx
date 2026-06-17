@@ -75,20 +75,17 @@ export function SavedScenariosList({
                         ? ` · ${scenario.intensity_pct}%`
                         : ""}
                     </span>
-                    <Badge
-                      className={styles.versionBadge}
-                      tone="neutral"
-                      variant="outline"
-                      size="sm"
-                      title={
-                        analysis
-                          ? `Analisado em ${analysis.analyzed_at ?? "-"} com versão ${analysis.code_version ?? "-"}`
-                          : "Análise ainda não executada"
-                      }
-                    >
-                      Analisado em {formatAnalyzedAt(analysis?.analyzed_at)} ·
-                      versão {analysis?.code_version ?? "-"}
-                    </Badge>
+                    <span className={styles.auditMeta}>
+                      <span>Analisado em {formatAnalyzedAt(analysis?.analyzed_at)}</span>
+                      <Badge
+                        className={styles.versionBadge}
+                        tone="neutral"
+                        variant="outline"
+                        size="sm"
+                      >
+                        Versão do código: {analysis?.code_version ?? "-"}
+                      </Badge>
+                    </span>
                   </div>
                   <div className={styles.actions}>
                     <Button

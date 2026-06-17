@@ -41,7 +41,7 @@ export function useScenarioCompare(
 ) {
   return useQuery({
     queryKey: scenarioCompareKey(runId, scenarioIds),
-    enabled: runId != null && scenarioIds.length > 0,
+    enabled: runId != null && scenarioIds.length >= 2,
     queryFn: () =>
       api.compareScenarios({
         model_run_id: runId!,
