@@ -1,0 +1,67 @@
+.strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--gg-space-4);
+}
+
+@media (max-width: 900px) {
+  .strip { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 520px) {
+  .strip { grid-template-columns: 1fr; }
+}
+
+.tile {
+  background: var(--gg-surface);
+  border: 1px solid var(--gg-border);
+  border-radius: 10px;
+  padding: var(--gg-space-4) var(--gg-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+.tile::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 10px 10px 0 0;
+}
+
+.tone_blue::before  { background: var(--gg-blue); }
+.tone_green::before { background: var(--gg-green); }
+.tone_orange::before { background: var(--gg-orange); }
+.tone_indigo::before { background: var(--gg-indigo); }
+
+.tileIcon {
+  color: var(--gg-text-secondary);
+  display: flex;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.tone_blue  .tileIcon { color: var(--gg-blue); }
+.tone_green .tileIcon { color: var(--gg-green); }
+.tone_orange .tileIcon { color: var(--gg-orange); }
+.tone_indigo .tileIcon { color: var(--gg-indigo); }
+
+.tileLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gg-text-secondary);
+  font-weight: 500;
+}
+
+.tileValue {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--gg-text-primary);
+  line-height: 1.2;
+}

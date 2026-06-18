@@ -57,6 +57,8 @@ from gograph.backend.app.db.models import (
     ChannelMetric,
     ChannelRecommendation,
     DataQualityCheck,
+    FunnelStateAttribution,
+    LoopDiagnostic,
     ModelRun,
     ModelRunInput,
     ModelRunLog,
@@ -88,6 +90,36 @@ router = APIRouter(prefix="/model-runs", tags=["model-runs"])
 MAX_PAGE_SIZE = 500
 # Converts absolute Markov/Shapley weight delta into a 0-1 agreement score.
 CONSENSUS_DELTA_MULTIPLIER = 5.0
+
+
+# ---------------------------------------------------------------------------
+# Motor de Lift — response schemas
+# ---------------------------------------------------------------------------
+
+class LiftInsightItem(BaseModel):
+    id: str
+    title: str
+    category: str
+    lift_pct: float
+    confidence: str
+    priority: str
+    evidence: list[str]
+    hypothesis: str
+    actions: list[str]
+    base_conv_rate: float | None = None
+    lift_conv_rate: float | None = None
+    base_label: str | None = None
+    lift_label: str | None = None
+
+
+class LiftEngineResponse(BaseModel):
+    model_run_id: int
+    baseline_conversion_rate: float
+    total_insights: int
+    avg_lift: float
+    critical_count: int
+    estimated_rev_impact: str
+    insights: list[LiftInsightItem]
 
 
 @router.post("", response_model=ModelRunOverviewResponse)
@@ -644,6 +676,267 @@ def get_sequential_effects(
         limit=limit,
         offset=offset,
     )
+
+
+# ---------------------------------------------------------------------------
+# Sprint 19 — Motor de Lift
+# ---------------------------------------------------------------------------
+
+@router.get("/{model_run_id}/lift-engine", response_model=LiftEngineResponse)
+def get_lift_engine(
+    model_run_id: int,
+    session: Session = Depends(get_db_session),
+) -> LiftEngineResponse:
+    """Motor de Lift — synthesizes channel, sequence, and loop lift insights."""
+    run = _get_completed_run_or_404(model_run_id, session)
+    baseline_cr = run.model_conversion_rate or 0.0
+
+    insights = _build_lift_insights(model_run_id, session, baseline_cr)
+
+    avg_lift = sum(i.lift_pct for i in insights) / len(insights) if insights else 0.0
+    critical_count = sum(1 for i in insights if i.priority == "critica")
+
+    return LiftEngineResponse(
+        model_run_id=model_run_id,
+        baseline_conversion_rate=baseline_cr,
+        total_insights=len(insights),
+        avg_lift=round(avg_lift),
+        critical_count=critical_count,
+        estimated_rev_impact="",
+        insights=insights,
+    )
+
+
+def _lift_slug(text: str) -> str:
+    import re
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:40]
+
+
+def _map_confidence_str(conf: str | None) -> str:
+    return {"high": "alta", "medium": "media"}.get(conf or "", "baixa")
+
+
+def _map_confidence_score(score: float | None) -> str:
+    if score is None:
+        return "baixa"
+    if score >= 0.65:
+        return "alta"
+    if score >= 0.35:
+        return "media"
+    return "baixa"
+
+
+_NOISY_CHANNELS = {"Other", "other", "(direct)", "Direct"}
+
+
+def _map_priority(lift_pct: float, confidence: str) -> str:
+    if confidence == "alta" and lift_pct >= 150:
+        return "critica"
+    if lift_pct >= 80 and confidence in ("alta", "media"):
+        return "alta"
+    if lift_pct >= 30:
+        return "media"
+    return "baixa"
+
+
+def _build_lift_insights(
+    model_run_id: int,
+    session: Session,
+    baseline_cr: float,
+) -> list[LiftInsightItem]:
+    insights: list[LiftInsightItem] = []
+
+    # 1. Sequência — order-2 bigram lift
+    seq_rows = session.execute(
+        select(SequentialEffect)
+        .where(
+            SequentialEffect.model_run_id == model_run_id,
+            SequentialEffect.diagnostic_label == "positive_assist",
+            SequentialEffect.lift_vs_baseline > 1.1,
+            SequentialEffect.support >= 5,
+            SequentialEffect.previous_channel.not_in(list(_NOISY_CHANNELS)),
+            SequentialEffect.current_channel.not_in(list(_NOISY_CHANNELS)),
+        )
+        .order_by(SequentialEffect.lift_vs_baseline.desc().nullslast())
+        .limit(6)
+    ).scalars().all()
+
+    for row in seq_rows:
+        prev = row.previous_channel
+        curr = row.current_channel
+        lift_pct = round((row.lift_vs_baseline - 1) * 100)
+        conf = _map_confidence_str(row.confidence)
+        insights.append(LiftInsightItem(
+            id=f"seq-{_lift_slug(prev)}-{_lift_slug(curr)}",
+            title=f"{prev} → {curr} converte +{lift_pct}% acima de {curr} isolado",
+            category="sequencia",
+            lift_pct=float(lift_pct),
+            confidence=conf,
+            priority=_map_priority(lift_pct, conf),
+            evidence=[
+                f"{(row.conversion_count or 0):.0f} conversões registradas com a sequência {prev} → {curr}",
+                f"Taxa de conversão do par: {(row.conversion_probability_pair or 0)*100:.1f}% vs baseline de {(row.conversion_probability_baseline or 0)*100:.1f}%",
+                f"Suporte: {row.support} observações — confiança {row.confidence}",
+            ],
+            hypothesis=(
+                f"A exposição a {prev} antes de {curr} indica uma jornada mais qualificada, "
+                f"com maior intenção de compra no momento do contato com {curr}."
+            ),
+            actions=[
+                f"Usar {prev} como canal de aquecimento antes de campanhas de {curr}",
+                f"Criar segmentos de remarketing de {curr} para usuários impactados por {prev}",
+                f"Testar criativos de {curr} direcionados a audiências oriundas de {prev}",
+            ],
+            base_conv_rate=row.conversion_probability_baseline,
+            lift_conv_rate=row.conversion_probability_pair,
+            base_label=curr,
+            lift_label=f"{prev} → {curr}",
+        ))
+
+    # 2. Canal — presence lift (presence_converting / presence_nonconverting)
+    channel_rows = _primary_channel_metric_rows(model_run_id, session)
+    presence_candidates: list[tuple[float, ChannelMetric]] = []
+    for row in channel_rows:
+        if row.channel in _NOISY_CHANNELS:
+            continue
+        pc = row.presence_converting or 0.0
+        pnc = row.presence_nonconverting or 0.0
+        if pc < 0.03 or pnc < 0.005:
+            continue
+        lift_ratio = pc / pnc
+        lift_pct = round((lift_ratio - 1) * 100)
+        if lift_pct >= 15:
+            presence_candidates.append((float(lift_pct), row))
+
+    presence_candidates.sort(key=lambda x: x[0], reverse=True)
+    for lift_pct, row in presence_candidates[:5]:
+        pc_pct = (row.presence_converting or 0.0) * 100
+        pnc_pct = (row.presence_nonconverting or 0.0) * 100
+        conf = _map_confidence_score(row.confidence_score)
+        removal = (row.removal_effect or 0.0) * 100
+        insights.append(LiftInsightItem(
+            id=f"canal-{_lift_slug(row.channel)}",
+            title=f"{row.channel} aparece {lift_pct:.0f}% mais em jornadas que converteram",
+            category="canal",
+            lift_pct=lift_pct,
+            confidence=conf,
+            priority=_map_priority(lift_pct, conf),
+            evidence=[
+                f"{pc_pct:.1f}% das jornadas convertidas contêm {row.channel}",
+                f"Apenas {pnc_pct:.1f}% das jornadas não-convertidas contêm {row.channel}",
+                f"Efeito de remoção Markov: queda de {removal:.1f}% na conversão sem este canal",
+            ],
+            hypothesis=(
+                f"{row.channel} está presente de forma desproporcional nas jornadas vencedoras — "
+                f"provável canal qualificador ou de fechamento com alto impacto incremental."
+            ),
+            actions=[
+                f"Aumentar cobertura e frequência de {row.channel} nas jornadas de alto valor",
+                f"Criar audiências lookalike a partir de usuários que passaram por {row.channel}",
+                f"Analisar quais criativos e mensagens de {row.channel} geram maior progressão de funil",
+            ],
+        ))
+
+    # 3. Canal/Frequência — loop lift (repeated exposure)
+    loop_rows = session.execute(
+        select(LoopDiagnostic)
+        .where(
+            LoopDiagnostic.model_run_id == model_run_id,
+            LoopDiagnostic.loop_conversion_lift > 1.1,
+            LoopDiagnostic.support >= 5,
+            LoopDiagnostic.channel.not_in(list(_NOISY_CHANNELS)),
+        )
+        .order_by(LoopDiagnostic.loop_conversion_lift.desc().nullslast())
+        .limit(3)
+    ).scalars().all()
+
+    for row in loop_rows:
+        lift_pct = round(((row.loop_conversion_lift or 1.0) - 1) * 100)
+        conf = _map_confidence_str(row.confidence)
+        lcr = (row.loop_conversion_rate or 0.0) * 100
+        nlcr = (row.nonloop_conversion_rate or 0.0) * 100
+        insights.append(LiftInsightItem(
+            id=f"loop-{_lift_slug(row.channel)}",
+            title=f"Múltiplas exposições a {row.channel} elevam conversão em +{lift_pct}%",
+            category="evento",
+            lift_pct=float(lift_pct),
+            confidence=conf,
+            priority=_map_priority(lift_pct, conf),
+            evidence=[
+                f"Taxa de conversão com loop em {row.channel}: {lcr:.1f}% vs {nlcr:.1f}% sem repetição",
+                f"Taxa de auto-loop: {(row.self_loop_rate or 0)*100:.1f}% das transições retornam ao mesmo canal",
+                f"Suporte: {row.support} jornadas com loops analisadas",
+            ],
+            hypothesis=(
+                f"Usuários que retornam múltiplas vezes a {row.channel} estão em modo de consideração — "
+                f"cada exposição adicional aumenta a probabilidade de conversão."
+            ),
+            actions=[
+                f"Aumentar frequência de exposição a {row.channel} para usuários já qualificados",
+                f"Criar campanhas de remarketing sequencial em {row.channel}",
+                f"Identificar o número ideal de exposições em {row.channel} antes da compra",
+            ],
+        ))
+
+    # 4. Canal/Funil — funnel stage presence lift
+    funnel_rows = session.execute(
+        select(FunnelStateAttribution)
+        .where(
+            FunnelStateAttribution.model_run_id == model_run_id,
+            FunnelStateAttribution.presence_converting > 0.05,
+            FunnelStateAttribution.presence_nonconverting > 0.001,
+            FunnelStateAttribution.support >= 5,
+        )
+    ).scalars().all()
+
+    funnel_candidates: list[tuple[float, FunnelStateAttribution]] = []
+    for row in funnel_rows:
+        pc = row.presence_converting or 0.0
+        pnc = row.presence_nonconverting or 0.0
+        if pnc <= 0:
+            continue
+        lift_pct = round((pc / pnc - 1) * 100)
+        if lift_pct >= 20:
+            funnel_candidates.append((float(lift_pct), row))
+
+    funnel_candidates.sort(key=lambda x: x[0], reverse=True)
+    seen_funnel: set[str] = set()
+    for lift_pct, row in funnel_candidates[:4]:
+        key = f"{row.channel}-{row.funnel_stage}"
+        if key in seen_funnel:
+            continue
+        seen_funnel.add(key)
+        conf = _map_confidence_str(row.confidence)
+        pc_pct = (row.presence_converting or 0.0) * 100
+        pnc_pct = (row.presence_nonconverting or 0.0) * 100
+        insights.append(LiftInsightItem(
+            id=f"funil-{_lift_slug(row.channel)}-{_lift_slug(row.funnel_stage or '')}",
+            title=f"{row.channel} em {row.funnel_stage} aparece {lift_pct:.0f}% mais em conversões",
+            category="canal",
+            lift_pct=lift_pct,
+            confidence=conf,
+            priority=_map_priority(lift_pct, conf),
+            evidence=[
+                f"{pc_pct:.1f}% das jornadas convertidas contêm {row.channel} na etapa {row.funnel_stage}",
+                f"Apenas {pnc_pct:.1f}% das jornadas não-convertidas passam por esse estado",
+                f"Peso Markov atribuído a este estado: {(row.markov_weight or 0)*100:.2f}%",
+            ],
+            hypothesis=(
+                f"{row.channel} na etapa de {row.funnel_stage} representa um sinal forte de intenção — "
+                f"usuários que chegam aqui têm muito maior probabilidade de comprar."
+            ),
+            actions=[
+                f"Investir em conteúdo de {row.funnel_stage} no canal {row.channel}",
+                f"Criar campanhas específicas para usuários identificados nesta etapa do funil",
+                f"Reduzir atrito de {row.funnel_stage} para {row.channel} para aumentar taxa de avanço",
+            ],
+        ))
+
+    # Sort by priority then lift_pct
+    priority_order = {"critica": 0, "alta": 1, "media": 2, "baixa": 3}
+    insights.sort(key=lambda i: (priority_order.get(i.priority, 9), -i.lift_pct))
+
+    return insights
 
 
 @router.get("/{model_run_id}/export")

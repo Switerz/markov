@@ -305,6 +305,32 @@ export type SequentialEffectRow = {
   diagnostic_label?: string | null;
 };
 
+export type LiftInsightItem = {
+  id: string;
+  title: string;
+  category: string;
+  lift_pct: number;
+  confidence: string;
+  priority: string;
+  evidence: string[];
+  hypothesis: string;
+  actions: string[];
+  base_conv_rate?: number | null;
+  lift_conv_rate?: number | null;
+  base_label?: string | null;
+  lift_label?: string | null;
+};
+
+export type LiftEngineResponse = {
+  model_run_id: number;
+  baseline_conversion_rate: number;
+  total_insights: number;
+  avg_lift: number;
+  critical_count: number;
+  estimated_rev_impact: string;
+  insights: LiftInsightItem[];
+};
+
 // ---------------------------------------------------------------------------
 // Sandbox types
 // ---------------------------------------------------------------------------
@@ -626,6 +652,8 @@ export const api = {
     request<TableResponse<TransitionRow>>(`/model-runs/${id}/transitions`),
   getSessionQuality: (id: number) =>
     request<TableResponse<SessionQualityRow>>(`/model-runs/${id}/session-quality`),
+  getLiftEngine: (id: number) =>
+    request<LiftEngineResponse>(`/model-runs/${id}/lift-engine`),
   createRun: (payload: ModelRunCreatePayload) =>
     request<ModelRun>("/model-runs", {
       method: "POST",

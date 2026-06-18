@@ -7,6 +7,7 @@ import { JourneysPage } from "../features/journeys/JourneysPage";
 import { ExperimentsPage } from "../features/experiments/ExperimentsPage";
 import { ExecutionsQualityPage } from "../features/executions-quality/ExecutionsQualityPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
+import { LiftEnginePage } from "../features/lift-engine/LiftEnginePage";
 
 export const router = createBrowserRouter([
   {
@@ -20,6 +21,7 @@ export const router = createBrowserRouter([
       { path: "decisoes-de-budget", element: <BudgetDecisionsPage /> },
       { path: "decisoes-de-budget/canais/:slug", element: <Channel360Page /> },
       { path: "jornadas", element: <JourneysPage /> },
+      { path: "motor-de-lift", element: <LiftEnginePage /> },
       { path: "experimentos", element: <ExperimentsPage /> },
       { path: "execucoes-e-qualidade", element: <ExecutionsQualityPage /> },
       { path: "configuracoes", element: <SettingsPage /> },

@@ -1,0 +1,258 @@
+.card {
+  background: var(--gg-surface);
+  border: 1px solid var(--gg-border);
+  border-left: 3px solid var(--priority-color, var(--gg-border));
+  border-radius: 10px;
+  padding: var(--gg-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gg-space-3);
+  transition: box-shadow 0.15s ease, transform 0.1s ease;
+}
+
+.card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+/* ── Header ── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.badges {
+  display: flex;
+  gap: 6px;
+}
+
+/* ── Title ── */
+.title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gg-text-primary);
+  line-height: 1.4;
+  margin: 0;
+}
+
+/* ── Lift chip ── */
+.liftChip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  background: color-mix(in srgb, var(--gg-green) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--gg-green) 20%, transparent);
+  border-radius: 8px;
+  padding: 6px 12px;
+  align-self: flex-start;
+}
+
+.liftValue {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.5px;
+}
+
+.liftPositive { color: var(--gg-green); }
+.liftNegative { color: var(--gg-red); }
+
+.liftLabel {
+  font-size: 11px;
+  color: var(--gg-text-secondary);
+}
+
+/* ── Path comparison ── */
+.pathComparison {
+  background: var(--gg-surface-soft);
+  border: 1px solid var(--gg-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.pathRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.pathRowLift {
+  background: color-mix(in srgb, var(--gg-green) 5%, transparent);
+}
+
+.pathTag {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gg-text-secondary);
+  background: var(--gg-border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  flex-shrink: 0;
+  min-width: 32px;
+  text-align: center;
+}
+
+.pathTagLift {
+  color: var(--gg-green);
+  background: color-mix(in srgb, var(--gg-green) 15%, transparent);
+}
+
+.pathName {
+  font-size: 12px;
+  color: var(--gg-text-secondary);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pathNameLift {
+  color: var(--gg-text-primary);
+  font-weight: 500;
+}
+
+.pathRate {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gg-text-secondary);
+  flex-shrink: 0;
+}
+
+.pathRateLift {
+  color: var(--gg-green);
+}
+
+.pathDivider {
+  display: flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-top: 1px solid var(--gg-border);
+  border-bottom: 1px solid var(--gg-border);
+  background: var(--gg-surface);
+  gap: 6px;
+}
+
+.pathDelta {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gg-green);
+}
+
+.pathArrow {
+  color: var(--gg-text-secondary);
+}
+
+/* ── Evidence ── */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sectionLabel {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--gg-text-secondary);
+}
+
+.evidenceList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.evidenceItem {
+  font-size: 12px;
+  color: var(--gg-text-primary);
+  padding-left: 14px;
+  position: relative;
+  line-height: 1.5;
+}
+
+.evidenceItem::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: var(--gg-blue);
+  font-weight: 700;
+}
+
+/* ── Hypothesis ── */
+.hypothesis {
+  font-size: 12px;
+  color: var(--gg-text-secondary);
+  line-height: 1.5;
+  margin: 0;
+  font-style: italic;
+  padding-left: 10px;
+  border-left: 2px solid var(--gg-border);
+}
+
+/* ── Actions toggle ── */
+.actionsToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--gg-border);
+  padding: var(--gg-space-2) 0 0;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--gg-text-secondary);
+  transition: color 0.1s;
+  margin-top: auto;
+}
+
+.actionsToggle:hover {
+  color: var(--gg-text-primary);
+}
+
+.toggleIcon {
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.toggleIconOpen {
+  transform: rotate(180deg);
+}
+
+/* ── Action list ── */
+.actionList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.actionItem {
+  font-size: 12px;
+  color: var(--gg-text-primary);
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  line-height: 1.5;
+}
+
+.actionIcon {
+  color: var(--gg-blue);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
