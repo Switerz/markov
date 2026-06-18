@@ -6,6 +6,7 @@ import { Button, useToast } from "../../shared/ui";
 import { downloadCsv, todayIso } from "../../shared/format";
 import { NewRunDialog } from "../../app/dialogs/NewRunDialog";
 import { useBudgetDecisionsData } from "./hooks/useBudgetDecisionsData";
+import { AttributionModelsComparison } from "./components/AttributionModelsComparison";
 import { BudgetDecisionFilters } from "./components/BudgetDecisionFilters";
 import { RecommendationSummaryCards } from "./components/RecommendationSummaryCards";
 import { AllocationMatrix } from "./components/AllocationMatrix";
@@ -79,6 +80,7 @@ export function BudgetDecisionsPage() {
       />
       <NewRunDialog open={newRunOpen} onOpenChange={setNewRunOpen} />
       <div className={styles.page}>
+        <AttributionModelsComparison runId={activeRun?.id} />
         <RecommendationSummaryCards cards={data.summaryCards} />
         <div className={styles.twoCol}>
           <AllocationMatrix
