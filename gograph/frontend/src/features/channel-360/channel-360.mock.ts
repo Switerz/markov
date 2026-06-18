@@ -9,9 +9,9 @@ export const channel360Mock: Channel360Data = {
   screen: {
     id: "channel-360-google-ads",
     title: "Google Ads",
-    route: "/decisoes-de-budget/canais/google-ads",
-    activeNav: "Decisões de Budget",
-    breadcrumb: ["GoGraph", "Decisões de Budget", "Canal 360"],
+    route: "/performance/canais/google-ads",
+    activeNav: "Performance",
+    breadcrumb: ["GoGraph", "Performance", "Canal 360"],
     channel: {
       name: "Google Ads",
       logo: "GoogleAds",

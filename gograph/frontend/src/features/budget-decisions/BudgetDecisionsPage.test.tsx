@@ -17,7 +17,7 @@ describe("BudgetDecisionsPage", () => {
   it("renders the screen title", () => {
     renderPage();
     expect(
-      screen.getByRole("heading", { level: 1, name: "Decisões de Budget" }),
+      screen.getByRole("heading", { level: 1, name: "Performance" }),
     ).toBeInTheDocument();
   });
 
@@ -90,7 +90,7 @@ describe("BudgetDecisionsPage", () => {
     });
     expect(link).toHaveAttribute(
       "href",
-      "/decisoes-de-budget/canais/google-ads",
+      "/performance/canais/google-ads",
     );
   });
 });

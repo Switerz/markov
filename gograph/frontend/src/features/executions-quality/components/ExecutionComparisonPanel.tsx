@@ -3,12 +3,18 @@ import { Badge, Card, StatDelta } from "../../../shared/ui";
 import { toneColor } from "../../../shared/charts";
 import { channelIcon, channelInitial } from "../../../shared/icons/channelIcons";
 import type { Tone } from "../../../shared/tokens/tokens";
+import type { ModelRun } from "../../../lib/api";
 import type { CompareExecutions } from "../types";
 
 import styles from "./ExecutionComparisonPanel.module.css";
 
 export type ExecutionComparisonPanelProps = {
   compare: CompareExecutions;
+  runs?: ModelRun[];
+  primaryId?: number;
+  compareId?: number;
+  onPrimaryChange?: (id: number) => void;
+  onCompareChange?: (id: number) => void;
 };
 
 // Inline percent parser — matches the shape used in other phases. Returns
@@ -44,12 +50,33 @@ function badgeTone(t: string): Tone {
   return "neutral";
 }
 
-export function ExecutionComparisonPanel({ compare }: ExecutionComparisonPanelProps) {
+function variationTone(delta: string): "positive" | "negative" | "neutral" {
+  const trimmed = delta.trim();
+  if (trimmed.startsWith("-")) return "negative";
+  if (trimmed.startsWith("+") || /\d/.test(trimmed)) return "positive";
+  return "neutral";
+}
+
+function runOptionLabel(run: ModelRun): string {
+  return `#${run.id} · ${run.start_date} → ${run.end_date}`;
+}
+
+export function ExecutionComparisonPanel({
+  compare,
+  runs,
+  primaryId,
+  compareId,
+  onPrimaryChange,
+  onCompareChange,
+}: ExecutionComparisonPanelProps) {
   // Pick a max for the bars so the from/to mini-bars use a comparable scale
   // across rows in the same panel.
   const maxPct = compare.channelContributionChange.reduce((acc, r) => {
     return Math.max(acc, parsePercent(r.from), parsePercent(r.to));
   }, 0.01);
+
+  const completedRuns = (runs ?? []).filter((r) => r.status === "completed");
+  const hasSelectors = completedRuns.length > 0 && (onPrimaryChange || onCompareChange);
 
   return (
     <Card>
@@ -57,14 +84,48 @@ export function ExecutionComparisonPanel({ compare }: ExecutionComparisonPanelPr
         <div className={styles.headerRow}>
           <Card.Title>{compare.title}</Card.Title>
           <div className={styles.headerControls}>
-            <button type="button" className={styles.chip} aria-label="Selecionar execução base">
-              {compare.from}
-              <ChevronDown size={12} aria-hidden />
-            </button>
-            <button type="button" className={styles.chip} aria-label="Selecionar execução de referência">
-              {compare.to}
-              <ChevronDown size={12} aria-hidden />
-            </button>
+            {hasSelectors && onCompareChange ? (
+              <label className={styles.chip} aria-label="Selecionar execução base">
+                <select
+                  value={compareId ?? ""}
+                  onChange={(e) => onCompareChange(Number(e.target.value))}
+                  className={styles.chipSelect}
+                >
+                  {completedRuns.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {runOptionLabel(r)}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={12} aria-hidden />
+              </label>
+            ) : (
+              <button type="button" className={styles.chip} aria-label="Selecionar execução base">
+                {compare.from}
+                <ChevronDown size={12} aria-hidden />
+              </button>
+            )}
+            {hasSelectors && onPrimaryChange ? (
+              <label className={styles.chip} aria-label="Selecionar execução de referência">
+                <select
+                  value={primaryId ?? ""}
+                  onChange={(e) => onPrimaryChange(Number(e.target.value))}
+                  className={styles.chipSelect}
+                >
+                  {completedRuns.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {runOptionLabel(r)}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={12} aria-hidden />
+              </label>
+            ) : (
+              <button type="button" className={styles.chip} aria-label="Selecionar execução de referência">
+                {compare.to}
+                <ChevronDown size={12} aria-hidden />
+              </button>
+            )}
           </div>
         </div>
       </Card.Header>
@@ -74,7 +135,7 @@ export function ExecutionComparisonPanel({ compare }: ExecutionComparisonPanelPr
             <span className={styles.variationLabel}>{compare.variation.title}</span>
             <div className={styles.variationRow}>
               <span className={styles.variationValue}>{compare.variation.value}</span>
-              <StatDelta value={compare.variation.delta} tone="positive" />
+              <StatDelta value={compare.variation.delta} tone={variationTone(compare.variation.delta)} />
             </div>
           </div>
 

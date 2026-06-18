@@ -48,7 +48,7 @@ describe("ChannelDetailsDrawer", () => {
     const link = screen.getByRole("link", { name: /Ver canal 360/i });
     expect(link).toHaveAttribute(
       "href",
-      "/decisoes-de-budget/canais/google-ads",
+      "/performance/canais/google-ads",
     );
   });
 });

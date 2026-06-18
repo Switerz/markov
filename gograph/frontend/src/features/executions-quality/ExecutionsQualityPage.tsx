@@ -14,7 +14,9 @@ import { useExecutionsQualityData } from "./hooks/useExecutionsQualityData";
 import styles from "./ExecutionsQualityPage.module.css";
 
 export function ExecutionsQualityPage() {
-  const data = useExecutionsQualityData();
+  const [comparePrimaryId, setComparePrimaryId] = useState<number | undefined>();
+  const [compareSecondaryId, setCompareSecondaryId] = useState<number | undefined>();
+  const data = useExecutionsQualityData(comparePrimaryId, compareSecondaryId);
   const defaultSelected =
     data.executionHistory.rows.find((r) => r.selected)?.id ??
     data.executionHistory.rows[0]?.id;
@@ -124,7 +126,17 @@ export function ExecutionsQualityPage() {
             />
             <div className={styles.row2}>
               <TrustCenterPanel trust={data.trustCenter} />
-              <ExecutionComparisonPanel compare={data.compareExecutions} />
+              <ExecutionComparisonPanel
+                compare={data.compareExecutions}
+                runs={data.runs}
+                primaryId={comparePrimaryId ?? data.runs[0]?.id}
+                compareId={
+                  compareSecondaryId ??
+                  data.runs.find((r) => r.id !== (comparePrimaryId ?? data.runs[0]?.id))?.id
+                }
+                onPrimaryChange={setComparePrimaryId}
+                onCompareChange={setCompareSecondaryId}
+              />
             </div>
           </section>
           <aside className={styles.right}>

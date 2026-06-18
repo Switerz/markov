@@ -112,6 +112,13 @@ export type ConsensusPoint = {
   tone: Tone;
 };
 
+export type ConsensusModelId = "markov" | "shapley" | "last_click" | "first_click";
+
+export type ConsensusModelOption = {
+  id: ConsensusModelId;
+  label: string;
+};
+
 export type ModelConsensus = {
   title: string;
   subtitle: string;
@@ -120,6 +127,9 @@ export type ModelConsensus = {
   quadrants: QuadrantSpec[];
   points: ConsensusPoint[];
   legend: string[];
+  availableModels: ConsensusModelOption[];
+  selectedX: ConsensusModelId;
+  selectedY: ConsensusModelId;
 };
 
 export type JourneyColumnItem = { name: string; value: string };

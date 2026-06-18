@@ -53,11 +53,6 @@ describe("OverviewPage", () => {
     );
   });
 
-  it("renders confidence summary label", () => {
-    renderPage();
-    expect(screen.getByText(/confiança geral: alta/i)).toBeInTheDocument();
-  });
-
   it("clicking Nova execução opens the NewRunDialog modal", () => {
     renderPage();
     expect(

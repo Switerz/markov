@@ -43,9 +43,8 @@ describe("JourneysPage", () => {
     expect(screen.getByRole("tab", { name: /Matriz/i })).toBeInTheDocument();
   });
 
-  it("default tab 'flow' shows Sankey and Builder", () => {
+  it("default tab 'flow' shows Builder full-width", () => {
     renderPage();
-    expect(screen.getByText("Fluxo de jornadas")).toBeInTheDocument();
     expect(screen.getByText("Construir jornada")).toBeInTheDocument();
   });
 

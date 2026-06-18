@@ -146,7 +146,7 @@ function ResumoTab({ drawer }: { drawer: SelectedChannelDrawer }) {
 
       <footer className={styles.actions}>
         <Link
-          to={`/decisoes-de-budget/canais/${slug}`}
+          to={`/performance/canais/${slug}`}
           className={styles.linkButton}
         >
           Ver canal 360

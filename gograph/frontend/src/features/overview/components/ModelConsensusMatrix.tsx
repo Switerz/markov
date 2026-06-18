@@ -1,9 +1,13 @@
 import { Card, Select } from "../../../shared/ui";
 import { BubbleMatrix, type BubblePoint } from "../../../shared/charts";
-import type { ModelConsensus } from "../types";
+import type { ConsensusModelId, ModelConsensus } from "../types";
 import styles from "./ModelConsensusMatrix.module.css";
 
-export type ModelConsensusMatrixProps = { consensus: ModelConsensus };
+export type ModelConsensusMatrixProps = {
+  consensus: ModelConsensus;
+  onSelectX?: (model: ConsensusModelId) => void;
+  onSelectY?: (model: ConsensusModelId) => void;
+};
 
 // Parses the JSON size buckets ("100K", "250K", "500K", "1M+") into numbers
 // the BubbleMatrix can scale. Unknown formats fall back to 0.
@@ -23,7 +27,11 @@ function formatLegendSize(v: number): string {
   return `${v / 1_000}K`;
 }
 
-export function ModelConsensusMatrix({ consensus }: ModelConsensusMatrixProps) {
+export function ModelConsensusMatrix({
+  consensus,
+  onSelectX,
+  onSelectY,
+}: ModelConsensusMatrixProps) {
   const points: BubblePoint[] = consensus.points.map((p) => ({
     id: p.channel,
     label: p.channel,
@@ -41,9 +49,29 @@ export function ModelConsensusMatrix({ consensus }: ModelConsensusMatrixProps) {
           <Card.Description>{consensus.subtitle}</Card.Description>
         </div>
         <div className={styles.viewByGroup}>
-          <span className={styles.viewByLabel}>Ver por:</span>
-          <Select value={consensus.viewBy} ariaLabel="Visualização do gráfico">
-            <Select.Item value={consensus.viewBy}>{consensus.viewBy}</Select.Item>
+          <span className={styles.viewByLabel}>Eixo X:</span>
+          <Select
+            value={consensus.selectedX}
+            onValueChange={(v) => onSelectX?.(v as ConsensusModelId)}
+            ariaLabel="Modelo do eixo X"
+          >
+            {consensus.availableModels.map((m) => (
+              <Select.Item key={m.id} value={m.id}>
+                {m.label}
+              </Select.Item>
+            ))}
+          </Select>
+          <span className={styles.viewByLabel}>Eixo Y:</span>
+          <Select
+            value={consensus.selectedY}
+            onValueChange={(v) => onSelectY?.(v as ConsensusModelId)}
+            ariaLabel="Modelo do eixo Y"
+          >
+            {consensus.availableModels.map((m) => (
+              <Select.Item key={m.id} value={m.id}>
+                {m.label}
+              </Select.Item>
+            ))}
           </Select>
         </div>
       </Card.Header>

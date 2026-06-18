@@ -14,6 +14,9 @@ export const router = createBrowserRouter([
     element: <AppShell />,
     children: [
       { index: true, element: <OverviewPage /> },
+      { path: "performance", element: <BudgetDecisionsPage /> },
+      { path: "performance/canais/:slug", element: <Channel360Page /> },
+      // Legacy slugs kept so old links keep working.
       { path: "decisoes-de-budget", element: <BudgetDecisionsPage /> },
       { path: "decisoes-de-budget/canais/:slug", element: <Channel360Page /> },
       { path: "jornadas", element: <JourneysPage /> },

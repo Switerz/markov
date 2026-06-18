@@ -1,6 +1,6 @@
 .page {
   padding: var(--gg-space-5);
-  max-width: 800px;
+  max-width: 960px;
   margin: 0 auto;
   width: 100%;
   min-width: 0;
@@ -11,7 +11,66 @@
   font-size: 13px;
 }
 
-@media (max-width: 640px) {
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gg-space-4);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gg-space-2);
+  min-width: 0;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gg-text-primary);
+  display: flex;
+  align-items: baseline;
+  gap: var(--gg-space-2);
+}
+
+.hintInline {
+  color: var(--gg-text-secondary);
+  font-weight: 400;
+  font-size: 12px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--gg-text-secondary);
+}
+
+.input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--gg-border-default);
+  border-radius: 6px;
+  font-size: 14px;
+  background: var(--gg-surface-default);
+  color: var(--gg-text-primary);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--gg-accent-default);
+  box-shadow: 0 0 0 2px var(--gg-accent-soft);
+}
+
+.footerActions {
+  display: flex;
+  gap: var(--gg-space-3);
+  justify-content: flex-end;
+  width: 100%;
+}
+
+@media (max-width: 720px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
   .page {
     padding: var(--gg-space-3);
   }

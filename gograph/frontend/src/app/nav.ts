@@ -10,7 +10,7 @@ export type NavItem = {
 
 export const NAV_ITEMS: NavItem[] = [
   { id: "overview",  label: "Visão Geral",          icon: LayoutDashboard, to: "/" },
-  { id: "budget",    label: "Decisões de Budget",   icon: Wallet,          to: "/decisoes-de-budget" },
+  { id: "budget",    label: "Performance",          icon: Wallet,          to: "/performance" },
   { id: "journeys",  label: "Jornadas",             icon: Workflow,        to: "/jornadas" },
   { id: "experiments", label: "Experimentos",       icon: FlaskConical,    to: "/experimentos" },
   { id: "executions", label: "Execuções & Qualidade", icon: ShieldCheck,   to: "/execucoes-e-qualidade" },

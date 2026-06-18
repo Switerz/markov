@@ -11,6 +11,7 @@ import {
   useToast,
 } from "../../shared/ui";
 import { api, type ModelRunCreatePayload } from "../../lib/api";
+import { useModelDefaults } from "../../features/settings/useModelDefaults";
 import styles from "./NewRunDialog.module.css";
 
 export type NewRunDialogProps = {
@@ -92,6 +93,12 @@ export function NewRunDialog({
 }: NewRunDialogProps) {
   const toast = useToast();
   const queryClient = useQueryClient();
+  const { asRunPayload } = useModelDefaults();
+  // When no explicit defaults prop is passed (i.e. user clicked "Nova execução"
+  // from a generic button), seed the form with the values configured in
+  // Configurações instead of the hard-coded constants.
+  const effectiveDefaults: Partial<ModelRunCreatePayload> | undefined =
+    defaults ?? asRunPayload();
 
   const {
     control,
@@ -101,13 +108,16 @@ export function NewRunDialog({
     formState: { errors, isSubmitting },
   } = useForm<SchemaValues>({
     resolver: zodResolver(schema),
-    defaultValues: mergeDefaults(defaults),
+    defaultValues: mergeDefaults(effectiveDefaults),
   });
 
   useEffect(() => {
     if (open) {
-      reset(mergeDefaults(defaults));
+      reset(mergeDefaults(effectiveDefaults));
     }
+    // We intentionally exclude effectiveDefaults from deps — reset on open is enough
+    // and re-running on every render of useModelDefaults() would clobber edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaults, reset]);
 
   const mutation = useMutation({

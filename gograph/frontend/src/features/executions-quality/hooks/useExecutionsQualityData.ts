@@ -1,8 +1,9 @@
 import { useMemo } from "react";
-import { useQueries } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { useRunsList } from "../../../app/hooks/useActiveRun";
 import {
   api,
+  type ChannelRow,
   type DataQualityRow,
   type ModelRun,
   type ModelRunCreatePayload,
@@ -11,8 +12,11 @@ import {
   type ModelRunSummaryRow,
 } from "../../../lib/api";
 import { formatCompactBRL, formatNumber, formatPercent } from "../../../shared/format";
+import type { StatTone } from "../../../shared/ui/StatDelta";
 import { executionsQualityMock } from "../executions-quality.mock";
 import type {
+  CompareChannelChange,
+  CompareExecutions,
   ExecutionDetailsPanelData,
   ExecutionHistory,
   ExecutionHistoryRow,
@@ -335,7 +339,72 @@ function trustCenterFromDetail(run: ModelRun | undefined, detail: RunDetail | un
   };
 }
 
-export function useExecutionsQualityData(): UseExecutionsQualityData {
+function buildCompareExecutions(
+  primaryRun: ModelRun | undefined,
+  compareRun: ModelRun | undefined,
+  primaryChannels: ChannelRow[],
+  compareChannels: ChannelRow[],
+): CompareExecutions {
+  if (!primaryRun || !compareRun) {
+    return executionsQualityMock.compareExecutions;
+  }
+  const primaryRevenue = primaryRun.total_revenue ?? 0;
+  const compareRevenue = compareRun.total_revenue ?? 0;
+  const diff = primaryRevenue - compareRevenue;
+  const diffPct = compareRevenue > 0 ? diff / compareRevenue : 0;
+  const variationValue = `${diff >= 0 ? "+" : ""}${formatCompactBRL(diff)}`;
+  const variationDelta = `${diffPct >= 0 ? "+" : ""}${formatPercent(diffPct, 1)}`;
+
+  // Compute per-channel shifts in Markov revenue share between the two runs.
+  const totalPrimary = primaryChannels.reduce((acc, c) => acc + (c.markov_revenue ?? 0), 0) || 1;
+  const totalCompare = compareChannels.reduce((acc, c) => acc + (c.markov_revenue ?? 0), 0) || 1;
+  const compareByChannel = new Map(compareChannels.map((c) => [c.channel, c]));
+
+  type CompareRowWithDelta = CompareChannelChange & { absDeltaPp: number };
+  const allRows: CompareRowWithDelta[] = [];
+  for (const current of primaryChannels) {
+    const other = compareByChannel.get(current.channel);
+    if (!other) continue;
+    const fromShare = (other.markov_revenue ?? 0) / totalCompare;
+    const toShare = (current.markov_revenue ?? 0) / totalPrimary;
+    const deltaPp = (toShare - fromShare) * 100;
+    const tone: StatTone =
+      Math.abs(deltaPp) < 0.5 ? "neutral" : deltaPp > 0 ? "positive" : "negative";
+    allRows.push({
+      channel: current.channel,
+      from: formatPercent(fromShare, 1),
+      to: formatPercent(toShare, 1),
+      delta: `${deltaPp >= 0 ? "+" : ""}${deltaPp.toFixed(1).replace(".", ",")} p.p.`,
+      tone,
+      absDeltaPp: Math.abs(deltaPp),
+    });
+  }
+  const rows: CompareChannelChange[] = allRows
+    .sort((a, b) => b.absDeltaPp - a.absDeltaPp)
+    .slice(0, 6)
+    .map(({ absDeltaPp: _absDeltaPp, ...rest }) => rest);
+
+  return {
+    ...executionsQualityMock.compareExecutions,
+    from: `#${compareRun.id} · ${formatRunRange(compareRun)}`,
+    to: `#${primaryRun.id} · ${formatRunRange(primaryRun)}`,
+    variation: {
+      title: "Variação na receita atribuída total",
+      value: variationValue,
+      delta: variationDelta,
+    },
+    channelContributionChange: rows,
+  };
+}
+
+function formatRunRange(run: ModelRun): string {
+  return `${run.start_date} → ${run.end_date}`;
+}
+
+export function useExecutionsQualityData(
+  primaryRunId?: number,
+  compareRunId?: number,
+): UseExecutionsQualityData {
   const runsQuery = useRunsList();
   const runs = runsQuery.data ?? [];
   const hasApiRows = runs.length > 0;
@@ -355,6 +424,28 @@ export function useExecutionsQualityData(): UseExecutionsQualityData {
   const criticalCount = firstDetail?.dataQuality.filter((check) =>
     ["critical", "high"].includes((check.severity ?? "").toLowerCase()),
   ).length;
+
+  const primaryRun = primaryRunId != null
+    ? runs.find((r) => r.id === primaryRunId)
+    : firstRun;
+  const compareRun = compareRunId != null
+    ? runs.find((r) => r.id === compareRunId)
+    : runs.find((r) => r.id !== primaryRun?.id && r.status === "completed");
+
+  const primaryChannelsQuery = useQuery({
+    queryKey: ["channels", primaryRun?.id],
+    enabled: primaryRun != null && primaryRun.status === "completed",
+    queryFn: () => api.getChannels(primaryRun!.id),
+    staleTime: 60_000,
+  });
+  const compareChannelsQuery = useQuery({
+    queryKey: ["channels", compareRun?.id],
+    enabled: compareRun != null && compareRun.id !== primaryRun?.id && compareRun.status === "completed",
+    queryFn: () => api.getChannels(compareRun!.id),
+    staleTime: 60_000,
+  });
+  const primaryChannelsData = primaryChannelsQuery.data?.rows ?? [];
+  const compareChannelsData = compareChannelsQuery.data?.rows ?? [];
 
   return useMemo(() => {
     const base: ExecutionsQualityData = hasApiRows
@@ -385,6 +476,12 @@ export function useExecutionsQualityData(): UseExecutionsQualityData {
           ),
           executionHistory: historyFromRuns(runs),
           trustCenter: trustCenterFromDetail(firstRun, firstDetail),
+          compareExecutions: buildCompareExecutions(
+            primaryRun,
+            compareRun,
+            primaryChannelsData,
+            compareChannelsData,
+          ),
           executionDetailsPanel: detailsForRun(firstRun, firstDetail),
         }
       : executionsQualityMock;
@@ -415,5 +512,9 @@ export function useExecutionsQualityData(): UseExecutionsQualityData {
     runsQuery.error,
     runsQuery.isError,
     runsQuery.isLoading,
+    primaryRun,
+    compareRun,
+    primaryChannelsData,
+    compareChannelsData,
   ]);
 }

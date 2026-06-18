@@ -7,7 +7,6 @@ import { NewRunDialog } from "../../app/dialogs/NewRunDialog";
 import { useActiveRun } from "../../app/hooks/useActiveRun";
 import { JourneyFilters } from "./components/JourneyFilters";
 import { JourneyViewTabs } from "./components/JourneyViewTabs";
-import { JourneySankeyPanel } from "./components/JourneySankeyPanel";
 import { JourneyGraphPanel } from "./components/JourneyGraphPanel";
 import { TopPathsTable } from "./components/TopPathsTable";
 import { TransitionMatrixHeatmap } from "./components/TransitionMatrixHeatmap";
@@ -108,17 +107,10 @@ export function JourneysPage() {
         <Tabs.Root value={tab} onValueChange={setTab}>
           <JourneyViewTabs tabs={data.viewTabs} />
           <Tabs.Content value="flow">
-            <div className={styles.flowGrid}>
-              <JourneySankeyPanel
-                flow={data.journeyFlow}
-                metric={data.flowMetric}
-                onSwitchToGraph={() => setTab("graph")}
-              />
-              <JourneyPathBuilder
-                builder={data.journeyBuilder}
-                runId={runId}
-              />
-            </div>
+            <JourneyPathBuilder
+              builder={data.journeyBuilder}
+              runId={runId}
+            />
           </Tabs.Content>
           <Tabs.Content value="graph">
             <JourneyGraphPanel nodes={graph.nodes} edges={graph.edges} />

@@ -14,7 +14,7 @@ describe("Sidebar", () => {
   it("renders nav landmark with all main items", () => {
     renderAt("/");
     expect(screen.getByRole("navigation", { name: /navegação principal/i })).toBeInTheDocument();
-    ["Visão Geral", "Decisões de Budget", "Jornadas", "Experimentos", "Execuções & Qualidade", "Configurações"].forEach((label) =>
+    ["Visão Geral", "Performance", "Jornadas", "Experimentos", "Execuções & Qualidade", "Configurações"].forEach((label) =>
       expect(screen.getByRole("link", { name: new RegExp(label, "i") })).toBeInTheDocument(),
     );
   });

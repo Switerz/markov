@@ -23,12 +23,13 @@ export type ChannelHeaderProps = {
 };
 
 // Map the breadcrumb labels to the routes the app actually exposes.
-// "GoGraph" → "/"; "Decisões de Budget" → "/decisoes-de-budget";
-// "Canal 360" (last item) renders as text with no link.
+// "GoGraph" → "/"; "Performance" → "/performance"; legacy label kept for
+// backward-compat with older mocks.
 function breadcrumbCrumbs(labels: string[]): Crumb[] {
   const routes: Record<string, string> = {
     GoGraph: "/",
-    "Decisões de Budget": "/decisoes-de-budget",
+    Performance: "/performance",
+    "Decisões de Budget": "/performance",
   };
   return labels.map((label, i) => {
     const isLast = i === labels.length - 1;

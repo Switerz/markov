@@ -235,6 +235,14 @@ export const overviewMock: OverviewData = {
       { channel: "Video (YouTube)", x: -50, y: -55, size: "100K", tone: "red" },
     ],
     legend: ["100K", "250K", "500K", "1M+"],
+    availableModels: [
+      { id: "markov", label: "Markov" },
+      { id: "shapley", label: "Shapley" },
+      { id: "last_click", label: "Último clique" },
+      { id: "first_click", label: "Primeiro clique" },
+    ],
+    selectedX: "markov",
+    selectedY: "shapley",
   },
   journeySummary: {
     title: "Resumo da jornada",

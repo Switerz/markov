@@ -127,9 +127,9 @@ const channelRows: ChannelTableRow[] = rawRows.map((r) => ({
 export const budgetDecisionsMock: BudgetDecisionsData = {
   screen: {
     id: "budget-decisions",
-    title: "Decisões de Budget",
-    route: "/decisoes-de-budget",
-    activeNav: "Decisões de Budget",
+    title: "Performance",
+    route: "/performance",
+    activeNav: "Performance",
   },
   topBar: {
     filters: [

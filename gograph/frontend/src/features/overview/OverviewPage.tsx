@@ -10,14 +10,16 @@ import { MetricCardGrid } from "./components/MetricCardGrid";
 import { PriorityDecisionCarousel } from "./components/PriorityDecisionCarousel";
 import { ModelConsensusMatrix } from "./components/ModelConsensusMatrix";
 import { JourneySummaryPanel } from "./components/JourneySummaryPanel";
-import { AnalysisConfidencePanel } from "./components/AnalysisConfidencePanel";
 import { useOverviewData } from "./hooks/useOverviewData";
 import { useOverviewFilters } from "./hooks/useOverviewFilters";
+import type { ConsensusModelId } from "./types";
 import styles from "./OverviewPage.module.css";
 
 export function OverviewPage() {
   const activeRun = useActiveRun();
-  const data = useOverviewData(activeRun?.id);
+  const [consensusX, setConsensusX] = useState<ConsensusModelId>("markov");
+  const [consensusY, setConsensusY] = useState<ConsensusModelId>("shapley");
+  const data = useOverviewData(activeRun?.id, undefined, { consensusX, consensusY });
   const { filters, set } = useOverviewFilters();
   const toast = useToast();
   const [newRunOpen, setNewRunOpen] = useState(false);
@@ -69,10 +71,13 @@ export function OverviewPage() {
         <MetricCardGrid metrics={data.metrics} />
         <PriorityDecisionCarousel decisions={data.priorityDecisions} />
         <div className={styles.twoCol}>
-          <ModelConsensusMatrix consensus={data.modelConsensus} />
+          <ModelConsensusMatrix
+            consensus={data.modelConsensus}
+            onSelectX={setConsensusX}
+            onSelectY={setConsensusY}
+          />
           <JourneySummaryPanel journey={data.journeySummary} />
         </div>
-        <AnalysisConfidencePanel confidence={data.analysisConfidence} />
         <p className={styles.footerNote}>{data.footerNote}</p>
       </div>
     </>

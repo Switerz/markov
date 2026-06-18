@@ -555,6 +555,7 @@ export type ModelRunCreatePayload = {
   db_datamart: number | null;
   batch_mode: "auto" | "always" | "never";
   batch_days: number;
+  censorship_days?: number | null;
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

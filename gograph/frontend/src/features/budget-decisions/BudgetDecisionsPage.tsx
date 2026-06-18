@@ -66,7 +66,7 @@ export function BudgetDecisionsPage() {
                   presence: r.presence,
                 }));
                 downloadCsv(
-                  `decisoes-de-budget-${todayIso()}.csv`,
+                  `performance-${todayIso()}.csv`,
                   rows,
                 );
                 toast.push("Exportação iniciada", "green");
