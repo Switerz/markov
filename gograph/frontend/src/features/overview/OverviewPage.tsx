@@ -83,14 +83,12 @@ export function OverviewPage() {
           onViewChannel={handleViewChannel}
           onCreateScenario={handleCreateScenario}
         />
-        <div className={styles.twoCol}>
-          <ModelConsensusMatrix
-            consensus={data.modelConsensus}
-            onSelectX={setConsensusX}
-            onSelectY={setConsensusY}
-          />
-          <JourneySummaryPanel journey={data.journeySummary} />
-        </div>
+        <ModelConsensusMatrix
+          consensus={data.modelConsensus}
+          onSelectX={setConsensusX}
+          onSelectY={setConsensusY}
+        />
+        <JourneySummaryPanel journey={data.journeySummary} />
         <p className={styles.footerNote}>{data.footerNote}</p>
       </div>
     </>

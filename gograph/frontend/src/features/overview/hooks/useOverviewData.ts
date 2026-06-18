@@ -5,7 +5,12 @@ import {
   type OverviewDashboardResponse,
   type TouchpointRow,
 } from "../../../lib/api";
-import { formatCompactBRL, formatMultiplier, formatPercent } from "../../../shared/format";
+import {
+  channelTone,
+  formatCompactBRL,
+  formatMultiplier,
+  formatPercent,
+} from "../../../shared/format";
 import { overviewMock } from "../overview.mock";
 import type {
   ConsensusModelId,
@@ -301,31 +306,21 @@ function buildJourneySummary(
   ctx: ToOverviewContext,
 ) {
   // 4 columns built from /touchpoints when available, with fallback to /dashboard/overview.
-  const entryColumn: JourneyColumn = topByTouchpoint(ctx.touchpoints, "first", "Top canais de entrada") ?? {
-    title: "Top canais de entrada",
-    items: data.journey_summary.top_entries.map((item) => ({
-      name: item.name,
-      value: formatPercent(item.value, 0),
-    })),
-  };
-  const middleColumn: JourneyColumn = topByTouchpoint(ctx.touchpoints, "middle", "Top canais de meio") ?? {
-    title: "Top canais de meio",
-    items: [],
-  };
-  const assistColumn: JourneyColumn = topByAssist(ctx.touchpoints) ?? {
-    title: "Top canais de assistência",
-    items: data.journey_summary.top_assistants.map((item) => ({
-      name: item.name,
-      value: formatPercent(item.value, 0),
-    })),
-  };
-  const closerColumn: JourneyColumn = topByTouchpoint(ctx.touchpoints, "last", "Top canais de fim") ?? {
-    title: "Top canais de fim",
-    items: data.journey_summary.top_closers.map((item) => ({
-      name: item.name,
-      value: formatPercent(item.value, 0),
-    })),
-  };
+  const entryColumn: JourneyColumn =
+    topByTouchpoint(ctx.touchpoints, "first", "Top canais de entrada") ??
+    fallbackColumn("Top canais de entrada", data.journey_summary.top_entries);
+  const middleColumn: JourneyColumn =
+    topByTouchpoint(ctx.touchpoints, "middle", "Top canais de meio") ??
+    fallbackColumn("Top canais de meio", []);
+  const assistColumn: JourneyColumn =
+    topByAssist(ctx.touchpoints) ??
+    fallbackColumn(
+      "Top canais de assistência",
+      data.journey_summary.top_assistants,
+    );
+  const closerColumn: JourneyColumn =
+    topByTouchpoint(ctx.touchpoints, "last", "Top canais de fim") ??
+    fallbackColumn("Top canais de fim", data.journey_summary.top_closers);
 
   return {
     ...overviewMock.journeySummary,
@@ -333,6 +328,21 @@ function buildJourneySummary(
     flow: data.journey_summary.flow_stages.map((item) => ({
       stage: item.name,
       value: formatPercent(item.value, 0),
+    })),
+  };
+}
+
+function fallbackColumn(
+  title: string,
+  items: Array<{ name: string; value: number }>,
+): JourneyColumn {
+  return {
+    title,
+    items: items.slice(0, 5).map((item) => ({
+      name: item.name,
+      value: formatPercent(item.value, 0),
+      valueRaw: item.value,
+      tone: channelTone(item.name),
     })),
   };
 }
@@ -359,6 +369,8 @@ function topByTouchpoint(
     items: sorted.map((t) => ({
       name: t.channel,
       value: formatPercent(t[field] ?? 0, 0),
+      valueRaw: t[field] ?? 0,
+      tone: channelTone(t.channel),
     })),
   };
 }
@@ -377,6 +389,8 @@ function topByAssist(touchpoints: TouchpointRow[]): JourneyColumn | null {
     items: sorted.map((t) => ({
       name: t.channel,
       value: formatPercent((t.assist_count ?? 0) / totalAssists, 0),
+      valueRaw: (t.assist_count ?? 0) / totalAssists,
+      tone: channelTone(t.channel),
     })),
   };
 }

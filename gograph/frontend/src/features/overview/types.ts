@@ -132,7 +132,12 @@ export type ModelConsensus = {
   selectedY: ConsensusModelId;
 };
 
-export type JourneyColumnItem = { name: string; value: string };
+export type JourneyColumnItem = {
+  name: string;
+  value: string;
+  valueRaw?: number; // 0..1, used to render the bar width
+  tone?: Tone;
+};
 
 export type JourneyColumn = {
   title: string;

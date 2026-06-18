@@ -46,11 +46,14 @@ describe("OverviewPage", () => {
     expect(screen.getAllByText(/shapley/i).length).toBeGreaterThan(0);
   });
 
-  it("renders journey summary stages", () => {
+  it("renders journey summary 4-column titles", () => {
     renderPage();
-    ["Entrada", "Assistidos", "Engajados", "Leads", "Conversões"].forEach(
-      (s) => expect(screen.getAllByText(s).length).toBeGreaterThan(0),
-    );
+    [
+      "Top canais de entrada",
+      "Top canais de meio",
+      "Top canais de assistência",
+      "Top canais de fim",
+    ].forEach((s) => expect(screen.getAllByText(s).length).toBeGreaterThan(0));
   });
 
   it("clicking Nova execução opens the NewRunDialog modal", () => {
