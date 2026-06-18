@@ -64,7 +64,7 @@ export function AttributionModelsComparison({ runId }: AttributionModelsComparis
       <Card.Header className={styles.header}>
         <div className={styles.titleBlock}>
           <Card.Title className={styles.titleLarge}>Como cada modelo distribui a receita</Card.Title>
-          <Card.Description>
+          <Card.Description className={styles.descriptionNoWrap}>
             % da receita atribuída a cada canal. Intensidade = peso. A última coluna mostra o viés First-UTM ÷ Last-click.
           </Card.Description>
         </div>

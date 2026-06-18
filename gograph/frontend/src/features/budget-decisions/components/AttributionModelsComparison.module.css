@@ -32,6 +32,13 @@
   font-size: calc(var(--gg-text-md) + 2px);
 }
 
+.descriptionNoWrap {
+  white-space: nowrap;
+  overflow-x: auto;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
 .body {
   display: flex;
   flex-direction: column;
