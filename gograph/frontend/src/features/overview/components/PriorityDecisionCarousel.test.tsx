@@ -17,9 +17,11 @@ describe("PriorityDecisionCarousel", () => {
     render(
       <PriorityDecisionCarousel decisions={overviewMock.priorityDecisions} />,
     );
+    // Each recommendation label now appears at least twice (badge on the card
+    // + tab in the filter row); assert presence via getAllByText.
     expect(screen.getAllByText("Escalar").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText("Defender")).toBeInTheDocument();
-    expect(screen.getByText("Investigar")).toBeInTheDocument();
-    expect(screen.getByText("Reduzir")).toBeInTheDocument();
+    expect(screen.getAllByText("Defender").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Investigar").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Reduzir").length).toBeGreaterThanOrEqual(1);
   });
 });

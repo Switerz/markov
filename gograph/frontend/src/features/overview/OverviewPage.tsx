@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Download, Plus } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { TopBar } from "../../app/TopBar";
 import { useActiveRun } from "../../app/hooks/useActiveRun";
 import { Button, useToast } from "../../shared/ui";
-import { downloadCsv, todayIso } from "../../shared/format";
+import { downloadCsv, slugify, todayIso } from "../../shared/format";
 import { NewRunDialog } from "../../app/dialogs/NewRunDialog";
 import { OverviewHeaderFilters } from "./components/OverviewHeaderFilters";
 import { MetricCardGrid } from "./components/MetricCardGrid";
@@ -22,7 +23,15 @@ export function OverviewPage() {
   const data = useOverviewData(activeRun?.id, undefined, { consensusX, consensusY });
   const { filters, set } = useOverviewFilters();
   const toast = useToast();
+  const navigate = useNavigate();
   const [newRunOpen, setNewRunOpen] = useState(false);
+
+  function handleViewChannel(channel: string) {
+    navigate(`/performance/canais/${slugify(channel)}`);
+  }
+  function handleCreateScenario(channel: string) {
+    navigate(`/experimentos?channel=${encodeURIComponent(channel)}`);
+  }
   return (
     <>
       <TopBar
@@ -69,7 +78,11 @@ export function OverviewPage() {
       <NewRunDialog open={newRunOpen} onOpenChange={setNewRunOpen} />
       <div className={styles.page}>
         <MetricCardGrid metrics={data.metrics} />
-        <PriorityDecisionCarousel decisions={data.priorityDecisions} />
+        <PriorityDecisionCarousel
+          decisions={data.priorityDecisions}
+          onViewChannel={handleViewChannel}
+          onCreateScenario={handleCreateScenario}
+        />
         <div className={styles.twoCol}>
           <ModelConsensusMatrix
             consensus={data.modelConsensus}

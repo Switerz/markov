@@ -218,20 +218,37 @@ function buildModelConsensus(
   const xLabel = availableModels.find((m) => m.id === ctx.consensusX)?.label ?? "Markov";
   const yLabel = availableModels.find((m) => m.id === ctx.consensusY)?.label ?? "Shapley";
 
-  const points = ctx.channels
-    .filter((c) => c.channel !== "Other" && (c.spend ?? 0) + (c.markov_revenue ?? 0) > 0)
+  // Show only channels with meaningful presence on either axis to keep the
+  // matrix readable. A channel passes if EITHER axis has >=1% weight OR it
+  // has measurable spend.
+  const MIN_WEIGHT_PCT = 1;
+  const candidates = ctx.channels.filter((c) => {
+    if (c.channel === "Other") return false;
+    const x = modelWeightPct(c, ctx.consensusX);
+    const y = modelWeightPct(c, ctx.consensusY);
+    const hasSpend = (c.spend ?? 0) > 0;
+    return hasSpend || x >= MIN_WEIGHT_PCT || y >= MIN_WEIGHT_PCT;
+  });
+
+  // Hard cap: top 12 channels by max(x, y) so the chart never gets cluttered.
+  const points = candidates
     .map((c) => {
       const x = modelWeightPct(c, ctx.consensusX);
       const y = modelWeightPct(c, ctx.consensusY);
       const spend = c.spend ?? channelsByName.get(c.channel)?.spend ?? 0;
       return {
         channel: c.channel,
+        rawX: x,
+        rawY: y,
         x: scaleToMatrix(x),
         y: scaleToMatrix(y),
         size: spend > 0 ? formatCompactBRL(spend).replace("R$ ", "") : "—",
         tone: tone(toneForRecommendation(c.recommendation)),
       };
-    });
+    })
+    .sort((a, b) => Math.max(b.rawX, b.rawY) - Math.max(a.rawX, a.rawY))
+    .slice(0, 12)
+    .map(({ rawX: _x, rawY: _y, ...rest }) => rest);
 
   return {
     ...overviewMock.modelConsensus,

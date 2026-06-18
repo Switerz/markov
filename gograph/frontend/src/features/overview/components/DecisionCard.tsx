@@ -3,10 +3,22 @@ import { channelIcon, channelInitial } from "../../../shared/icons/channelIcons"
 import type { PriorityDecision } from "../types";
 import styles from "./DecisionCard.module.css";
 
-export type DecisionCardProps = { decision: PriorityDecision };
+export type DecisionCardProps = {
+  decision: PriorityDecision;
+  onViewChannel?: (channel: string) => void;
+  onCreateScenario?: (channel: string) => void;
+};
 
-export function DecisionCard({ decision }: DecisionCardProps) {
+export function DecisionCard({
+  decision,
+  onViewChannel,
+  onCreateScenario,
+}: DecisionCardProps) {
   const icon = channelIcon(decision.channel, 16);
+  function handle(action: string) {
+    if (action === "Ver canal") onViewChannel?.(decision.channel);
+    else if (action === "Criar cenário") onCreateScenario?.(decision.channel);
+  }
   return (
     <Card className={styles.root}>
       <div className={styles.head}>
@@ -40,7 +52,7 @@ export function DecisionCard({ decision }: DecisionCardProps) {
 
       <div className={styles.actions}>
         {decision.actions.map((a) => (
-          <Button key={a} variant="secondary" size="sm">
+          <Button key={a} variant="secondary" size="sm" onClick={() => handle(a)}>
             {a}
           </Button>
         ))}
