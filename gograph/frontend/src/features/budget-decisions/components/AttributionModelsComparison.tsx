@@ -58,11 +58,12 @@ export function AttributionModelsComparison({ runId }: AttributionModelsComparis
   const narrative = useMemo(() => buildNarrative(rows), [rows]);
 
   return (
-    <Card>
+    <div className={styles.root}>
+      <div className={styles.eyebrow}>Comparativo dos 5 modelos de atribuição</div>
+      <Card>
       <Card.Header className={styles.header}>
         <div className={styles.titleBlock}>
-          <span className={styles.eyebrow}>Comparativo dos 5 modelos de atribuição</span>
-          <Card.Title>Como cada modelo distribui a receita</Card.Title>
+          <Card.Title className={styles.titleLarge}>Como cada modelo distribui a receita</Card.Title>
           <Card.Description>
             % da receita atribuída a cada canal. Intensidade = peso. A última coluna mostra o viés First-UTM ÷ Last-click.
           </Card.Description>
@@ -101,7 +102,8 @@ export function AttributionModelsComparison({ runId }: AttributionModelsComparis
         )}
         {narrative && <p className={styles.narrative}>{narrative}</p>}
       </Card.Body>
-    </Card>
+      </Card>
+    </div>
   );
 }
 
