@@ -1,18 +1,51 @@
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Info } from "lucide-react";
 import {
   Button,
   Modal,
   Select,
   Slider,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
   useToast,
 } from "../../shared/ui";
 import { api, type ModelRunCreatePayload } from "../../lib/api";
 import { useModelDefaults } from "../../features/settings/useModelDefaults";
 import styles from "./NewRunDialog.module.css";
+
+function FieldLabel({
+  label,
+  hint,
+  trailing,
+}: {
+  label: string;
+  hint: ReactNode;
+  trailing?: ReactNode;
+}) {
+  return (
+    <span className={styles.label}>
+      <span className={styles.labelText}>
+        {label}
+        <Tooltip delayDuration={150}>
+          <TooltipTrigger asChild>
+            <button type="button" className={styles.infoBtn} aria-label={`Sobre ${label}`}>
+              <Info size={13} aria-hidden />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className={styles.tooltip}>
+            {hint}
+          </TooltipContent>
+        </Tooltip>
+      </span>
+      {trailing}
+    </span>
+  );
+}
 
 export type NewRunDialogProps = {
   open: boolean;
@@ -174,7 +207,10 @@ export function NewRunDialog({
       >
         <div className={styles.row2}>
           <label className={styles.field}>
-            <span className={styles.label}>Data inicial</span>
+            <FieldLabel
+              label="Data inicial"
+              hint="Primeiro dia do período analisado. As compras consideradas têm purchase_date >= esta data."
+            />
             <input
               type="date"
               {...register("start_date")}
@@ -187,7 +223,10 @@ export function NewRunDialog({
             )}
           </label>
           <label className={styles.field}>
-            <span className={styles.label}>Data final</span>
+            <FieldLabel
+              label="Data final"
+              hint="Último dia do período analisado. Compras com purchase_date <= esta data entram no modelo."
+            />
             <input
               type="date"
               {...register("end_date")}
@@ -203,7 +242,18 @@ export function NewRunDialog({
 
         <div className={styles.row2}>
           <label className={styles.field}>
-            <span className={styles.label}>Lookback (dias)</span>
+            <FieldLabel
+              label="Lookback (dias)"
+              hint={
+                <>
+                  Janela retroativa para reconstruir a jornada. Cada conversão considera as sessões
+                  do usuário nos últimos N dias antes da compra.
+                  <br /><br />
+                  <strong>Maior</strong> = jornadas mais completas, mais memória, mais custo.
+                  <strong> Menor</strong> = visão de curto prazo, sub-atribui canais de topo de funil.
+                </>
+              }
+            />
             <input
               type="number"
               min={0}
@@ -219,7 +269,18 @@ export function NewRunDialog({
             name="batch_mode"
             render={({ field }) => (
               <label className={styles.field}>
-                <span className={styles.label}>Modo de lote</span>
+                <FieldLabel
+                  label="Modo de lote"
+                  hint={
+                    <>
+                      Quebra a extração de transições em pedaços para evitar OOM no ClickHouse.
+                      <br /><br />
+                      <strong>auto</strong> = quebra quando o período {">"} Dias por lote.<br />
+                      <strong>always</strong> = sempre quebra (debug).<br />
+                      <strong>never</strong> = uma query só (rápido em períodos pequenos).
+                    </>
+                  }
+                />
                 <Select
                   value={field.value}
                   onValueChange={(v) =>
@@ -238,7 +299,10 @@ export function NewRunDialog({
 
         <div className={styles.row2}>
           <label className={styles.field}>
-            <span className={styles.label}>Dias por lote</span>
+            <FieldLabel
+              label="Dias por lote"
+              hint="Tamanho de cada batch da extração quando o modo de lote dispara. 30 a 60 dias é o sweet spot para datasets do ClickHouse."
+            />
             <input
               type="number"
               min={1}
@@ -248,7 +312,17 @@ export function NewRunDialog({
             />
           </label>
           <label className={styles.field}>
-            <span className={styles.label}>Shapley samples</span>
+            <FieldLabel
+              label="Shapley samples"
+              hint={
+                <>
+                  Quantidade de coalizões amostradas pelo Monte Carlo do Shapley.
+                  <br /><br />
+                  <strong>1.000</strong>: rápido, ruidoso. <strong>5.000</strong>: padrão equilibrado.{" "}
+                  <strong>20.000+</strong>: estável, lento. Erro cai com ~1/√N.
+                </>
+              }
+            />
             <input
               type="number"
               min={100}
@@ -265,10 +339,20 @@ export function NewRunDialog({
           name="decay_lambda"
           render={({ field }) => (
             <label className={styles.field}>
-              <span className={styles.label}>
-                Decay λ
-                <span className={styles.hint}>{field.value.toFixed(2)}</span>
-              </span>
+              <FieldLabel
+                label="Decay λ"
+                trailing={<span className={styles.hint}>{field.value.toFixed(2)}</span>}
+                hint={
+                  <>
+                    Decaimento exponencial do peso das transições conforme a sessão fica mais antiga
+                    em relação à conversão. Peso = e^(−λ · dias).
+                    <br /><br />
+                    <strong>0,00</strong> = sem decay (todas as sessões pesam igual).<br />
+                    <strong>0,05</strong> = ~50% de peso após 14 dias (padrão).<br />
+                    <strong>0,15</strong> = ~50% após 4,6 dias (privilegia toques recentes).
+                  </>
+                }
+              />
               <Slider
                 min={0}
                 max={1}
@@ -282,7 +366,17 @@ export function NewRunDialog({
 
         <div className={styles.row2}>
           <label className={styles.field}>
-            <span className={styles.label}>Non-conv sample %</span>
+            <FieldLabel
+              label="Non-conv sample %"
+              hint={
+                <>
+                  Fração dos usuários sem conversão amostrada para o modelo.
+                  <br /><br />
+                  Em datasets grandes (milhões de não-conversores) usamos 1–5% para manter o cálculo tratável;
+                  o peso é recalibrado depois pelo <em>Non-conv scale</em>.
+                </>
+              }
+            />
             <input
               type="number"
               min={0}
@@ -293,7 +387,17 @@ export function NewRunDialog({
             />
           </label>
           <label className={styles.field}>
-            <span className={styles.label}>Non-conv scale</span>
+            <FieldLabel
+              label="Non-conv scale"
+              hint={
+                <>
+                  Reescala os não-conversores amostrados para representar o universo real.
+                  <br /><br />
+                  <strong>Vazio</strong> = autocalibra para bater a taxa observada (recomendado).<br />
+                  <strong>1</strong> = sem reescala. <strong>100</strong> = simula 100× mais não-conversores.
+                </>
+              }
+            />
             <input
               type="number"
               min={0}
@@ -307,7 +411,10 @@ export function NewRunDialog({
 
         <div className={styles.row2}>
           <label className={styles.field}>
-            <span className={styles.label}>DB Plausible</span>
+            <FieldLabel
+              label="DB Plausible"
+              hint="ID do banco Plausible (ClickHouse) no Metabase. As sessões UTM e jornadas vêm daqui. Padrão: 70."
+            />
             <input
               type="number"
               min={0}
@@ -316,7 +423,10 @@ export function NewRunDialog({
             />
           </label>
           <label className={styles.field}>
-            <span className={styles.label}>DB Datamart</span>
+            <FieldLabel
+              label="DB Datamart"
+              hint="ID do banco Data Mart no Metabase (spend de Google Ads, Meta, etc.). Necessário para calcular ROAS. Padrão: 63."
+            />
             <input
               type="number"
               min={0}

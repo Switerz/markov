@@ -23,6 +23,52 @@
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
+}
+
+.labelText {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.infoBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  color: var(--gg-text-secondary);
+  cursor: help;
+  padding: 0;
+  opacity: 0.55;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+
+.infoBtn:hover,
+.infoBtn:focus-visible {
+  opacity: 1;
+  color: var(--gg-text-primary);
+  background: var(--gg-surface-muted);
+  outline: none;
+}
+
+.tooltip {
+  max-width: 320px;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.tooltip strong {
+  color: var(--gg-text-primary);
+}
+
+.tooltip em {
+  font-style: italic;
 }
 
 .hint {
